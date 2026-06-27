@@ -3,12 +3,14 @@ import { Layout, Menu, Typography, Space, Tag } from 'antd';
 import {
   HomeOutlined, BookOutlined, EditOutlined, BulbOutlined, SettingOutlined,
   ThunderboltOutlined, FireOutlined, StarOutlined, HeartOutlined, BarChartOutlined,
-  SnippetsOutlined, TrophyOutlined, AuditOutlined, ReadOutlined,
+  SnippetsOutlined, TrophyOutlined, AuditOutlined, ReadOutlined, RobotOutlined,
 } from '@ant-design/icons';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { invoke } from './api/ipc';
+import { KEEP_ALIVE_PATHS, getKeepAlivePath, type KeepAlivePath } from './utils/keepAliveRoutes';
 
 import Dashboard from './pages/Dashboard';
+import LearningAgent from './pages/LearningAgent';
 import ArticleList from './pages/ArticleList';
 import ArticleEditor from './pages/ArticleEditor';
 import ApiConfig from './pages/ApiConfig';
@@ -30,6 +32,7 @@ const { Sider, Content, Header } = Layout;
 
 const MENU = [
   { key: '/', icon: <HomeOutlined />, label: <Link to="/">仪表盘</Link> },
+  { key: '/agent', icon: <RobotOutlined />, label: <Link to="/agent">学习 Agent</Link> },
   { key: '/articles', icon: <BookOutlined />, label: <Link to="/articles">文章管理</Link> },
   { key: '/questions', icon: <EditOutlined />, label: <Link to="/questions">题目管理</Link> },
   { key: '/ai-generate', icon: <BulbOutlined />, label: <Link to="/ai-generate">AI 出题</Link> },
@@ -42,6 +45,22 @@ const MENU = [
   { key: '/rankings', icon: <BarChartOutlined />, label: <Link to="/rankings">排行榜</Link> },
   { key: '/api', icon: <SettingOutlined />, label: <Link to="/api">API 配置</Link> },
 ];
+
+const KEEP_ALIVE_COMPONENTS: Record<KeepAlivePath, JSX.Element> = {
+  '/': <Dashboard />,
+  '/agent': <LearningAgent />,
+  '/articles': <ArticleList />,
+  '/questions': <QuestionList />,
+  '/ai-generate': <AiGenerate />,
+  '/weak-points': <WeakPointList />,
+  '/train': <Train />,
+  '/creative-recite': <CreativeRecite />,
+  '/rogue': <RogueGenerate />,
+  '/favorites': <Favorites />,
+  '/wrong': <WrongBook />,
+  '/rankings': <Rankings />,
+  '/api': <ApiConfig />,
+};
 
 export default function App() {
   const location = useLocation();
@@ -60,6 +79,17 @@ export default function App() {
   const selected = MENU.find((m) => location.pathname === m.key)?.key
     || MENU.find((m) => location.pathname.startsWith(m.key) && m.key !== '/')?.key
     || '/';
+  const activeKeepAlivePath = getKeepAlivePath(location.pathname);
+  const [mountedKeepAlivePaths, setMountedKeepAlivePaths] = useState<KeepAlivePath[]>(
+    () => activeKeepAlivePath ? [activeKeepAlivePath] : [],
+  );
+
+  useEffect(() => {
+    if (!activeKeepAlivePath) return;
+    setMountedKeepAlivePaths((paths) => (
+      paths.includes(activeKeepAlivePath) ? paths : [...paths, activeKeepAlivePath]
+    ));
+  }, [activeKeepAlivePath]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -93,28 +123,23 @@ export default function App() {
           </Space>
         </Header>
         <Content style={{ padding: 24, overflow: 'auto' }}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/articles" element={<ArticleList />} />
+          {KEEP_ALIVE_PATHS.filter((path) => mountedKeepAlivePaths.includes(path)).map((path) => (
+            <div key={path} style={{ display: activeKeepAlivePath === path ? 'block' : 'none' }}>
+              {KEEP_ALIVE_COMPONENTS[path]}
+            </div>
+          ))}
+          {!activeKeepAlivePath ? (
+            <Routes>
             <Route path="/articles/new" element={<ArticleEditor />} />
             <Route path="/articles/:id" element={<ArticleEditor />} />
-            <Route path="/questions" element={<QuestionList />} />
-            <Route path="/ai-generate" element={<AiGenerate />} />
-            <Route path="/weak-points" element={<WeakPointList />} />
             <Route path="/weak-points/new" element={<WeakPointEditor />} />
             <Route path="/weak-points/:id" element={<WeakPointEditor />} />
-            <Route path="/train" element={<Train />} />
-            <Route path="/creative-recite" element={<CreativeRecite />} />
-            <Route path="/rogue" element={<RogueGenerate />} />
             <Route path="/rogue/:dungeonId" element={<RogueDetail />} />
             <Route path="/rogue/play/:dungeonId" element={<RoguePlay />} />
             <Route path="/result/:runId" element={<Result />} />
-            <Route path="/favorites" element={<Favorites />} />
-            <Route path="/wrong" element={<WrongBook />} />
-            <Route path="/rankings" element={<Rankings />} />
-            <Route path="/api" element={<ApiConfig />} />
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+            </Routes>
+          ) : null}
         </Content>
       </Layout>
     </Layout>

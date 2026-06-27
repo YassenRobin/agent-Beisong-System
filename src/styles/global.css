@@ -122,6 +122,14 @@ a {
   box-shadow: 0 0 0 2px rgba(93, 63, 211, 0.1);
 }
 
+.article-choice-box.deselecting,
+.article-choice-box.deselecting:hover {
+  border-color: #e6e3ef;
+  background: #fff;
+  box-shadow: none;
+  animation: articleChoiceDeselect 0.26s ease both;
+}
+
 .article-choice-title,
 .article-choice-author {
   display: block;
@@ -138,6 +146,19 @@ a {
   margin-top: 6px;
   color: #767180;
   font-size: 12px;
+}
+
+@keyframes articleChoiceDeselect {
+  0% {
+    background: #f8f5ff;
+    border-color: #5d3fd3;
+    box-shadow: 0 0 0 2px rgba(93, 63, 211, 0.1);
+  }
+  100% {
+    background: #fff;
+    border-color: #e6e3ef;
+    box-shadow: none;
+  }
 }
 
 .question-result-card {

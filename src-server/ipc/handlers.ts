@@ -10,6 +10,7 @@ import * as favorite from '../services/favorite';
 import * as wrongItem from '../services/wrongItem';
 import * as stats from '../services/stats';
 import * as rogue from '../services/rogue';
+import * as learningAgent from '../services/learningAgent';
 import * as ai from '../ai/service';
 import { judgeLocally } from '../services/localJudge';
 import { ALL_PROVIDERS } from '../ai/registry';
@@ -22,6 +23,8 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
     // ===== Dashboard =====
     'dashboard:summary': () => stats.dashboardSummary(),
     'dashboard:recent-runs': (_p: { limit?: number }) => stats.recentRuns(_p?.limit || 10),
+    'agent:summary': () => learningAgent.getLearningAgentPlan(),
+    'agent:ai-plan': async () => learningAgent.generateAiLearningPlan(),
 
     // ===== Provider =====
     'provider:list': () => apiProvider.listProviders(),

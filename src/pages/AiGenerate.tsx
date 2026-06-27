@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Col, Divider, Form, Input, InputNumber, Modal, Row, Select, Space, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EyeOutlined, ImportOutlined, RobotOutlined } from '@ant-design/icons';
+import { CheckSquareOutlined, DeleteOutlined, EyeOutlined, ImportOutlined, RobotOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
@@ -62,6 +62,7 @@ export default function AiGenerate() {
   const [results, setResults] = useState<DraftQuestion[]>([]);
   const [active, setActive] = useState<DraftQuestion | null>(null);
   const [articleQuery, setArticleQuery] = useState('');
+  const [deselectingIds, setDeselectingIds] = useState<string[]>([]);
   const resultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -200,13 +201,29 @@ export default function AiGenerate() {
 
   const toggleArticle = (id: string, mode: string) => {
     const current: string[] = form.getFieldValue('text_ids') || [];
+    const isSelected = current.includes(id);
     const next = mode === 'weak_point'
       ? [id]
-      : current.includes(id)
+      : isSelected
         ? current.filter((x) => x !== id)
         : [...current, id];
     form.setFieldValue('text_ids', next);
     if (mode === 'weak_point') form.setFieldValue('weak_point_id', undefined);
+    if (mode !== 'weak_point' && isSelected) {
+      setDeselectingIds((ids) => Array.from(new Set([...ids, id])));
+      window.setTimeout(() => {
+        setDeselectingIds((ids) => ids.filter((x) => x !== id));
+      }, 260);
+    }
+  };
+
+  const toggleAllArticles = (selectedIds: string[]) => {
+    const allSelected = texts.length > 0 && texts.every((t) => selectedIds.includes(t.id));
+    form.setFieldValue('text_ids', allSelected ? [] : texts.map((t) => t.id));
+    if (allSelected) {
+      setDeselectingIds(texts.map((t) => t.id));
+      window.setTimeout(() => setDeselectingIds([]), 260);
+    }
   };
 
   return (
@@ -259,6 +276,7 @@ export default function AiGenerate() {
             {({ getFieldValue }) => {
               const mode = getFieldValue('mode');
               const selectedIds: string[] = getFieldValue('text_ids') || [];
+              const allArticlesSelected = texts.length > 0 && texts.every((t) => selectedIds.includes(t.id));
               return (
                 <Form.Item
                   label={mode === 'weak_point' ? '文章' : '文章（可多选）'}
@@ -276,14 +294,29 @@ export default function AiGenerate() {
                       onChange={(e) => setArticleQuery(e.target.value)}
                       placeholder="输入标题或作者搜索"
                     />
+                    {mode !== 'weak_point' ? (
+                      <Space wrap>
+                        <Button
+                          icon={<CheckSquareOutlined />}
+                          onClick={() => toggleAllArticles(selectedIds)}
+                          disabled={!texts.length}
+                        >
+                          {allArticlesSelected ? '取消选择全部文章' : '选择全部文章'}
+                        </Button>
+                        <Typography.Text type="secondary">
+                          已选择 {selectedIds.length} / {texts.length} 篇
+                        </Typography.Text>
+                      </Space>
+                    ) : null}
                     <div className="article-choice-grid">
                       {filteredTexts.map((t) => {
                         const selected = selectedIds.includes(t.id);
+                        const deselecting = deselectingIds.includes(t.id);
                         return (
                           <button
                             type="button"
                             key={t.id}
-                            className={`article-choice-box${selected ? ' active' : ''}`}
+                            className={`article-choice-box${selected ? ' active' : ''}${deselecting ? ' deselecting' : ''}`}
                             onClick={() => toggleArticle(t.id, mode)}
                           >
                             <span className="article-choice-title">{t.title}</span>
@@ -371,6 +404,7 @@ export default function AiGenerate() {
         onCancel={() => setActive(null)}
         footer={<Button type="primary" onClick={() => setActive(null)}>知道了</Button>}
         width={720}
+        getContainer={false}
         styles={{ mask: { backdropFilter: 'blur(8px)', background: 'rgba(245, 245, 247, 0.58)' } }}
       >
         {active ? (
