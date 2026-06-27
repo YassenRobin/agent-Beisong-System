@@ -122,12 +122,12 @@ a {
   box-shadow: 0 0 0 2px rgba(93, 63, 211, 0.1);
 }
 
-.article-choice-box.deselecting,
-.article-choice-box.deselecting:hover {
+.article-choice-box.hover-locked,
+.article-choice-box.hover-locked:hover {
   border-color: #e6e3ef;
   background: #fff;
   box-shadow: none;
-  animation: articleChoiceDeselect 0.26s ease both;
+  animation: articleChoiceDeselect 0.18s ease both;
 }
 
 .article-choice-title,

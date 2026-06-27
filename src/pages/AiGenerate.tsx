@@ -4,6 +4,7 @@ import { CheckSquareOutlined, DeleteOutlined, EyeOutlined, ImportOutlined, Robot
 import { useSearchParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
+import { releaseArticleHoverLock, toggleAllArticleSelection, toggleArticleSelection } from '../utils/articleSelection';
 
 const TYPE_OPTIONS = [
   { value: 'choice', label: '选择题' },
@@ -62,7 +63,7 @@ export default function AiGenerate() {
   const [results, setResults] = useState<DraftQuestion[]>([]);
   const [active, setActive] = useState<DraftQuestion | null>(null);
   const [articleQuery, setArticleQuery] = useState('');
-  const [deselectingIds, setDeselectingIds] = useState<string[]>([]);
+  const [hoverLockedIds, setHoverLockedIds] = useState<string[]>([]);
   const resultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -201,29 +202,20 @@ export default function AiGenerate() {
 
   const toggleArticle = (id: string, mode: string) => {
     const current: string[] = form.getFieldValue('text_ids') || [];
-    const isSelected = current.includes(id);
-    const next = mode === 'weak_point'
-      ? [id]
-      : isSelected
-        ? current.filter((x) => x !== id)
-        : [...current, id];
-    form.setFieldValue('text_ids', next);
+    const next = toggleArticleSelection(current, hoverLockedIds, id, mode);
+    form.setFieldValue('text_ids', next.selectedIds);
+    setHoverLockedIds(next.hoverLockedIds);
     if (mode === 'weak_point') form.setFieldValue('weak_point_id', undefined);
-    if (mode !== 'weak_point' && isSelected) {
-      setDeselectingIds((ids) => Array.from(new Set([...ids, id])));
-      window.setTimeout(() => {
-        setDeselectingIds((ids) => ids.filter((x) => x !== id));
-      }, 260);
-    }
   };
 
   const toggleAllArticles = (selectedIds: string[]) => {
-    const allSelected = texts.length > 0 && texts.every((t) => selectedIds.includes(t.id));
-    form.setFieldValue('text_ids', allSelected ? [] : texts.map((t) => t.id));
-    if (allSelected) {
-      setDeselectingIds(texts.map((t) => t.id));
-      window.setTimeout(() => setDeselectingIds([]), 260);
-    }
+    const next = toggleAllArticleSelection(texts.map((t) => t.id), selectedIds);
+    form.setFieldValue('text_ids', next.selectedIds);
+    setHoverLockedIds(next.hoverLockedIds);
+  };
+
+  const unlockArticleHover = (id: string) => {
+    setHoverLockedIds((ids) => releaseArticleHoverLock(ids, id));
   };
 
   return (
@@ -311,13 +303,14 @@ export default function AiGenerate() {
                     <div className="article-choice-grid">
                       {filteredTexts.map((t) => {
                         const selected = selectedIds.includes(t.id);
-                        const deselecting = deselectingIds.includes(t.id);
+                        const hoverLocked = hoverLockedIds.includes(t.id);
                         return (
                           <button
                             type="button"
                             key={t.id}
-                            className={`article-choice-box${selected ? ' active' : ''}${deselecting ? ' deselecting' : ''}`}
+                            className={`article-choice-box${selected ? ' active' : ''}${hoverLocked ? ' hover-locked' : ''}`}
                             onClick={() => toggleArticle(t.id, mode)}
+                            onMouseLeave={() => unlockArticleHover(t.id)}
                           >
                             <span className="article-choice-title">{t.title}</span>
                             {t.author ? <span className="article-choice-author">{t.author}</span> : null}
