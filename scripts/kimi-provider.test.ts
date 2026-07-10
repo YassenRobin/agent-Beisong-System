@@ -5,6 +5,7 @@ const originalFetch = globalThis.fetch;
 const requests: Array<{ url: string; body: any; authorization: string }> = [];
 
 globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const requestIndex = requests.length;
   requests.push({
     url: String(input),
     body: JSON.parse(String(init?.body || '{}')),
@@ -12,7 +13,11 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
   });
   return new Response(JSON.stringify({
     model: 'kimi-for-coding',
-    choices: [{ message: { content: 'OK' } }],
+    choices: [{
+      message: requestIndex === 2
+        ? { content: '', reasoning_content: 'The connection is valid.' }
+        : { content: 'OK' },
+    }],
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }) as typeof fetch;
 
@@ -40,6 +45,17 @@ async function main() {
 
     assert.equal(requests[1].body.model, 'kimi-k2.6');
     assert.equal(requests[1].body.temperature, 0.3);
+
+    const testResult = await provider.testConnection(
+      'code-key',
+      'https://api.kimi.com/coding/v1',
+      'kimi-for-coding',
+    );
+    assert.equal(testResult.ok, true);
+    assert.match(testResult.message, /连接成功/);
+    assert.equal(requests[2].body.max_tokens, 512);
+    assert.equal(requests[2].body.temperature, 1);
+    assert.equal(requests[2].body.model, 'kimi-for-coding');
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -92,8 +92,8 @@ export default function App() {
   }, [activeKeepAlivePath]);
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={220} theme="light" style={{ borderRight: '1px solid #ece9f6' }}>
+    <Layout className="app-shell">
+      <Sider width={220} theme="light" className="app-sidebar" style={{ borderRight: '1px solid #ece9f6' }}>
         <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid #ece9f6' }}>
           <Typography.Title level={4} style={{ margin: 0, color: '#5d3fd3' }} className="serif">
             <HeartOutlined style={{ marginRight: 8 }} />
@@ -110,8 +110,8 @@ export default function App() {
           style={{ borderRight: 0, paddingTop: 8 }}
         />
       </Sider>
-      <Layout>
-        <Header style={{ background: '#fff', borderBottom: '1px solid #ece9f6', padding: '0 24px' }}>
+      <Layout className="app-main-shell">
+        <Header className="app-header" style={{ background: '#fff', borderBottom: '1px solid #ece9f6', padding: '0 24px' }}>
           <Space size="middle">
             <TrophyOutlined style={{ color: '#fa8c16', fontSize: 18 }} />
             <Typography.Text strong style={{ fontSize: 16 }}>高中古诗文背诵闯关系统</Typography.Text>
@@ -122,23 +122,29 @@ export default function App() {
             )}
           </Space>
         </Header>
-        <Content style={{ padding: 24, overflow: 'auto' }}>
+        <Content className="app-content">
           {KEEP_ALIVE_PATHS.filter((path) => mountedKeepAlivePaths.includes(path)).map((path) => (
-            <div key={path} style={{ display: activeKeepAlivePath === path ? 'block' : 'none' }}>
+            <div
+              key={path}
+              className="app-content-scroll"
+              style={{ display: activeKeepAlivePath === path ? 'block' : 'none' }}
+            >
               {KEEP_ALIVE_COMPONENTS[path]}
             </div>
           ))}
           {!activeKeepAlivePath ? (
-            <Routes>
-            <Route path="/articles/new" element={<ArticleEditor />} />
-            <Route path="/articles/:id" element={<ArticleEditor />} />
-            <Route path="/weak-points/new" element={<WeakPointEditor />} />
-            <Route path="/weak-points/:id" element={<WeakPointEditor />} />
-            <Route path="/rogue/:dungeonId" element={<RogueDetail />} />
-            <Route path="/rogue/play/:dungeonId" element={<RoguePlay />} />
-            <Route path="/result/:runId" element={<Result />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <div className="app-content-scroll">
+              <Routes>
+                <Route path="/articles/new" element={<ArticleEditor />} />
+                <Route path="/articles/:id" element={<ArticleEditor />} />
+                <Route path="/weak-points/new" element={<WeakPointEditor />} />
+                <Route path="/weak-points/:id" element={<WeakPointEditor />} />
+                <Route path="/rogue/:dungeonId" element={<RogueDetail />} />
+                <Route path="/rogue/play/:dungeonId" element={<RoguePlay />} />
+                <Route path="/result/:runId" element={<Result />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
           ) : null}
         </Content>
       </Layout>

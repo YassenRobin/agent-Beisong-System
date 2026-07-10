@@ -67,13 +67,16 @@ export abstract class OpenAICompatibleProvider implements AIProvider {
             { role: 'system', content: '你是连接测试助手,只回复 OK。' },
             { role: 'user', content: 'ping' },
           ],
-          maxTokens: 16,
+          // 思考模型会先消耗推理 token；16 很容易在生成正文前就耗尽。
+          maxTokens: 512,
           temperature: 0,
         },
         apiKey,
         baseUrl,
       );
-      if (!res.content) return { ok: false, message: '返回内容为空' };
+      // 能走到这里说明接口已返回 2xx，鉴权、地址和模型均已通过。
+      // 思考模型可能只返回 reasoning_content，连接测试不应因此误判失败。
+      if (!res.content) return { ok: true, message: '连接成功，模型已响应（未返回可见文本）' };
       return { ok: true, message: `连接成功,示例回复: ${res.content.slice(0, 30)}` };
     } catch (e: any) {
       return { ok: false, message: e?.message || '连接失败' };
