@@ -12,7 +12,7 @@ export const PROVIDER_LABELS: Record<string, string> = {
   deepseek: 'DeepSeek',
 };
 
-/** 启动时确保 4 家厂商都已在库中,且 base_url / 默认模型始终与代码侧保持一致 */
+/** 启动时确保 4 家厂商都已在库中；只补齐空值，不覆盖用户自定义接入地址和模型。 */
 export function seedDefaultProviders() {
   transaction(() => {
     for (const p of ALL_PROVIDERS) {
@@ -49,10 +49,11 @@ export function seedDefaultProviders() {
           ],
         );
       } else {
-        // 已存在:同步刷新 base_url 和默认模型(用户 Key / 激活状态不动)
-        // 这样代码侧更新默认模型时,已 seed 的库记录也会跟上
+        // 已存在:仅补齐空值。API 配置页允许自定义地址和模型，启动时不能覆盖。
         execute(
-          `UPDATE api_providers SET base_url = ?, default_model = ?,
+          `UPDATE api_providers SET
+             base_url = COALESCE(NULLIF(base_url, ''), ?),
+             default_model = COALESCE(NULLIF(default_model, ''), ?),
              question_model = COALESCE(NULLIF(question_model, ''), ?),
              judge_model = COALESCE(NULLIF(judge_model, ''), ?),
              explain_model = COALESCE(NULLIF(explain_model, ''), ?),
@@ -60,8 +61,8 @@ export function seedDefaultProviders() {
              weak_point_model = COALESCE(NULLIF(weak_point_model, ''), ?),
              updated_at = ? WHERE id = ?`,
           [
-            defs.base_url || existing.base_url || '',
-            defs.default_model || existing.default_model || '',
+            defs.base_url || '',
+            defs.default_model || '',
             defs.default_model || '',
             defs.default_model || '',
             defs.default_model || '',
@@ -128,7 +129,8 @@ export function createProvider(input: ProviderInput): ProviderRecord {
   const defaults = defaultsForType(input.provider_type);
   const id = uid('pv_');
   const now = nowIso();
-  const apiKeyEnc = input.api_key ? encryptSecret(input.api_key) : '';
+  const normalizedApiKey = input.api_key?.trim() || '';
+  const apiKeyEnc = normalizedApiKey ? encryptSecret(normalizedApiKey) : '';
   execute(
     `INSERT INTO api_providers
       (id, name, provider_type, base_url, api_key_encrypted,
@@ -163,9 +165,13 @@ export function updateProvider(id: string, input: Partial<ProviderInput>): Provi
   const existing = getProviderById(id);
   if (!existing) throw new Error('Provider 不存在');
   const merged: ProviderInput = { ...existing, ...input };
-  const apiKeyEnc = input.api_key ? encryptSecret(input.api_key) : existing.api_key_masked ? existing.api_key_masked : '';
-  // 兼容:仅当显式传 api_key 字段时更新加密
-  const useEnc = input.api_key !== undefined ? apiKeyEnc : selectOne<any>(`SELECT api_key_encrypted FROM api_providers WHERE id = ?`, [id])?.api_key_encrypted || '';
+  const normalizedApiKey = input.api_key?.trim() || '';
+  const existingEncrypted = selectOne<any>(
+    `SELECT api_key_encrypted FROM api_providers WHERE id = ?`,
+    [id],
+  )?.api_key_encrypted || '';
+  // 空白输入视为“不修改”，避免把掩码或空格误存成新 Key。
+  const useEnc = normalizedApiKey ? encryptSecret(normalizedApiKey) : existingEncrypted;
   execute(
     `UPDATE api_providers SET
        name = ?, provider_type = ?, base_url = ?, api_key_encrypted = ?,
@@ -222,7 +228,7 @@ export async function testProvider(id: string): Promise<{ ok: boolean; message: 
   if (!provider) return { ok: false, message: '不支持的 Provider 类型' };
   const apiKey = decryptSecret(
     selectOne<any>(`SELECT api_key_encrypted FROM api_providers WHERE id = ?`, [id])?.api_key_encrypted || '',
-  );
+  ).trim();
   if (!apiKey) return { ok: false, message: '尚未填写 API Key' };
   return provider.testConnection(apiKey, p.base_url || '', p.default_model || '');
 }
