@@ -14,6 +14,7 @@ import * as learningAgent from '../services/learningAgent';
 import * as agentTools from '../services/agentTools';
 import * as masterAgent from '../services/masterAgent';
 import * as agentRuntime from '../services/agentRuntime';
+import * as weakPointLearningLoop from '../services/weakPointLearningLoop';
 import * as training from '../services/training';
 import * as ai from '../ai/service';
 import { judgeLocally } from '../services/localJudge';
@@ -37,6 +38,8 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
     'agent:goals': (p) => agentRuntime.listAgentGoals(p?.status),
     'agent:goal-create': (p) => agentRuntime.createAgentGoal(p),
     'agent:goal-status': (p) => agentRuntime.transitionAgentGoal(p.id, p.status),
+    'agent:weak-point-start': (p) => weakPointLearningLoop.startWeakPointLearningLoop({ weak_point_id: p?.weak_point_id }),
+    'agent:weak-point-evaluate': (p) => weakPointLearningLoop.evaluateWeakPointLearningRun(p.run_id),
     'agent:execute-plan': async (p) => learningAgent.executeAiLearningPlan(p.plan),
     'agent:execute-step': async (p) => {
       const plan = await learningAgent.executeAiLearningPlan({ ...p.plan, steps: [p.step] });

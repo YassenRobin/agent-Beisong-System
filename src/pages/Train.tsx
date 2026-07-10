@@ -4,6 +4,7 @@ import { StarOutlined, StarFilled } from '@ant-design/icons';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
 import { errorTypeLabel, questionTypeLabel } from '../utils/labels';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 type Question = {
   id: string;
@@ -37,7 +38,34 @@ type TrainingAttempt = {
   error_type?: string;
 };
 
+type AgentRunDetail = {
+  id: string;
+  status: string;
+  title: string;
+  summary?: string;
+  result?: {
+    question_ids?: string[];
+  };
+  goal?: {
+    title: string;
+  } | null;
+};
+
+type WeakPointLearningEvaluation = {
+  outcome: 'mastered' | 'continue' | 'incomplete';
+  total: number;
+  correct: number;
+  accuracy: number;
+  target_accuracy: number;
+  minimum_attempts: number;
+  next_run_id?: string;
+  route: string;
+};
+
 export default function Train() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const agentRunId = searchParams.get('agent_run_id');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [idx, setIdx] = useState(0);
   const [input, setInput] = useState('');
@@ -49,33 +77,54 @@ export default function Train() {
   const [recommendation, setRecommendation] = useState<TrainingRecommendation | null>(null);
   const [attempts, setAttempts] = useState<TrainingAttempt[]>([]);
   const [finished, setFinished] = useState(false);
+  const [agentRun, setAgentRun] = useState<AgentRunDetail | null>(null);
+  const [agentEvaluation, setAgentEvaluation] = useState<WeakPointLearningEvaluation | null>(null);
+  const [evaluatingAgent, setEvaluatingAgent] = useState(false);
 
   const load = async () => {
     try {
       const all = await invoke<Question[]>('question:list', { enabled: 1 });
       const favorites = await invoke<any[]>('favorite:list-questions', {});
-      const rec = await invoke<TrainingRecommendation>('training:recommendation', { type: filter, limit: 10 });
       setFavoriteIds(new Set(favorites.map((f) => f.question_id)));
-      setRecommendation(rec);
-      const recIds = new Set(rec.question_ids || []);
-      const recommended = (rec.question_ids || [])
-        .map((id) => all.find((q) => q.id === id))
-        .filter(Boolean) as Question[];
-      const fallback = (filter === 'all' ? all : all.filter((q) => q.type === filter))
-        .filter((q) => !recIds.has(q.id));
-      const list = [...recommended, ...fallback].slice(0, Math.max(10, recommended.length));
-      // 打乱
-      setQuestions(list);
+      if (agentRunId) {
+        const detail = await invoke<AgentRunDetail>('agent:run-detail', { id: agentRunId });
+        if (!detail || detail.status !== 'awaiting_student') throw new Error('该专项训练已结束或暂不可继续。');
+        const questionIds = detail.result?.question_ids || [];
+        const scopedQuestions = questionIds
+          .map((id) => all.find((q) => q.id === id))
+          .filter(Boolean) as Question[];
+        if (!scopedQuestions.length) throw new Error('专项训练题目不存在。');
+        setAgentRun(detail);
+        setRecommendation({
+          title: detail.goal?.title || detail.title,
+          description: detail.summary || '完成本轮专项题后，Agent 会自动评价并决定是否继续。',
+          question_ids: questionIds,
+          summary: { total: scopedQuestions.length, wrong: 0, weak: scopedQuestions.length, fresh: scopedQuestions.length },
+        });
+        setQuestions(scopedQuestions);
+      } else {
+        const rec = await invoke<TrainingRecommendation>('training:recommendation', { type: filter, limit: 10 });
+        setAgentRun(null);
+        setRecommendation(rec);
+        const recIds = new Set(rec.question_ids || []);
+        const recommended = (rec.question_ids || [])
+          .map((id) => all.find((q) => q.id === id))
+          .filter(Boolean) as Question[];
+        const fallback = (filter === 'all' ? all : all.filter((q) => q.type === filter))
+          .filter((q) => !recIds.has(q.id));
+        setQuestions([...recommended, ...fallback].slice(0, Math.max(10, recommended.length)));
+      }
       setIdx(0);
       setInput('');
       setChoice('');
       setResult(null);
       setAttempts([]);
       setFinished(false);
+      setAgentEvaluation(null);
     } catch (e: any) { message.error(e.message); }
   };
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { load(); }, [filter, agentRunId]);
 
   const cur = questions[idx];
 
@@ -134,8 +183,21 @@ export default function Train() {
     }
   };
 
-  const next = () => {
+  const next = async () => {
     if (idx + 1 >= questions.length) {
+      if (agentRunId) {
+        setEvaluatingAgent(true);
+        try {
+          const evaluation = await invoke<WeakPointLearningEvaluation>('agent:weak-point-evaluate', { run_id: agentRunId });
+          setAgentEvaluation(evaluation);
+          if (evaluation.outcome === 'mastered') message.success('专项学习目标已达成');
+          if (evaluation.outcome === 'continue') message.info('本轮未达目标，Agent 已生成下一轮训练');
+        } catch (e: any) {
+          message.error(e?.message || '专项学习评价失败');
+        } finally {
+          setEvaluatingAgent(false);
+        }
+      }
       setFinished(true);
       return;
     }
@@ -175,7 +237,7 @@ export default function Train() {
   if (finished) {
     return (
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>普通训练总结</Typography.Title>
+        <Typography.Title level={3} style={{ margin: 0 }}>{agentRun ? '薄弱点专项总结' : '普通训练总结'}</Typography.Title>
         <Card className="textbook-card">
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Alert
@@ -184,6 +246,16 @@ export default function Train() {
               message={accuracy >= 80 ? '本轮训练完成得不错' : '本轮训练已完成'}
               description={recommendation?.description || '已根据本轮答题结果生成总结。'}
             />
+            {agentEvaluation ? (
+              <Alert
+                type={agentEvaluation.outcome === 'mastered' ? 'success' : 'warning'}
+                showIcon
+                message={agentEvaluation.outcome === 'mastered' ? '学习目标已达成' : 'Agent 已完成重规划'}
+                description={agentEvaluation.outcome === 'mastered'
+                  ? `正确率 ${Math.round(agentEvaluation.accuracy * 100)}%，已达到 ${Math.round(agentEvaluation.target_accuracy * 100)}% 目标。`
+                  : `正确率 ${Math.round(agentEvaluation.accuracy * 100)}%，下一轮将继续围绕同一薄弱点训练。`}
+              />
+            ) : null}
             <Row gutter={[16, 16]}>
               <Col xs={12} md={6}><Statistic title="题数" value={attempts.length} /></Col>
               <Col xs={12} md={6}><Statistic title="正确" value={correctCount} /></Col>
@@ -197,8 +269,16 @@ export default function Train() {
                 ))}
               </Space>
             ) : null}
-            <Space>
-              <Button type="primary" onClick={load}>再来一轮 Agent 推荐训练</Button>
+            <Space wrap>
+              {agentEvaluation?.outcome === 'continue' && agentEvaluation.next_run_id ? (
+                <Button type="primary" onClick={() => setSearchParams({ agent_run_id: agentEvaluation.next_run_id! })}>
+                  开始下一轮专项训练
+                </Button>
+              ) : agentEvaluation?.outcome === 'mastered' ? (
+                <Button type="primary" onClick={() => navigate('/agent')}>返回学习 Agent</Button>
+              ) : !agentRun ? (
+                <Button type="primary" onClick={load}>再来一轮 Agent 推荐训练</Button>
+              ) : null}
               <Button onClick={() => setFinished(false)}>回看最后一题</Button>
             </Space>
           </Space>
@@ -210,16 +290,20 @@ export default function Train() {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>普通训练</Typography.Title>
+        <Typography.Title level={3} style={{ margin: 0 }}>{agentRun ? '薄弱点专项训练' : '普通训练'}</Typography.Title>
         <Space>
-          <Radio.Group value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <Radio.Button value="all">全部</Radio.Button>
-            <Radio.Button value="choice">选择</Radio.Button>
-            <Radio.Button value="blank">挖空</Radio.Button>
-            <Radio.Button value="context_recitation">文脉默写</Radio.Button>
-            <Radio.Button value="pure_recitation">纯默写</Radio.Button>
-          </Radio.Group>
-          <Button onClick={load}>换一组</Button>
+          {!agentRun ? (
+            <>
+              <Radio.Group value={filter} onChange={(e) => setFilter(e.target.value)}>
+                <Radio.Button value="all">全部</Radio.Button>
+                <Radio.Button value="choice">选择</Radio.Button>
+                <Radio.Button value="blank">挖空</Radio.Button>
+                <Radio.Button value="context_recitation">文脉默写</Radio.Button>
+                <Radio.Button value="pure_recitation">纯默写</Radio.Button>
+              </Radio.Group>
+              <Button onClick={load}>换一组</Button>
+            </>
+          ) : <Tag color="purple">Agent 目标训练</Tag>}
         </Space>
       </Space>
 
@@ -290,7 +374,9 @@ export default function Train() {
           {!result ? (
             <Button type="primary" loading={busy} onClick={onSubmit}>提交</Button>
           ) : (
-            <Button type="primary" onClick={next}>下一题</Button>
+            <Button type="primary" loading={evaluatingAgent} onClick={next}>
+              {idx + 1 >= questions.length && agentRun ? '完成并由 Agent 评价' : '下一题'}
+            </Button>
           )}
         </Space>
       </Card>

@@ -9,7 +9,7 @@ import {
   SnippetsOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { questionTypeListLabel } from '../utils/labels';
 
@@ -81,6 +81,11 @@ type MasterAgentRun = {
     result?: any;
     error?: string;
   }>;
+};
+
+type WeakPointLearningSession = {
+  run_id: string;
+  route: string;
 };
 
 const statusColor: Record<string, string> = {
@@ -193,6 +198,7 @@ function summarizeToolResult(result: any): string {
 }
 
 export default function LearningAgent() {
+  const navigate = useNavigate();
   const [plan, setPlan] = useState<AgentPlan | null>(null);
   const [aiPlan, setAiPlan] = useState<AiLearningPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -200,6 +206,7 @@ export default function LearningAgent() {
   const [executing, setExecuting] = useState(false);
   const [runningAgent, setRunningAgent] = useState(false);
   const [agentRun, setAgentRun] = useState<MasterAgentRun | null>(null);
+  const [startingWeakPointLoop, setStartingWeakPointLoop] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -251,6 +258,19 @@ export default function LearningAgent() {
     }
   };
 
+  const startWeakPointLoop = async () => {
+    setStartingWeakPointLoop(true);
+    try {
+      const session = await invoke<WeakPointLearningSession>('agent:weak-point-start', {});
+      message.success('薄弱点专项目标已建立，进入第一轮训练');
+      navigate(session.route);
+    } catch (e: any) {
+      message.error(e?.message || '薄弱点专项学习启动失败');
+    } finally {
+      setStartingWeakPointLoop(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
@@ -293,6 +313,15 @@ export default function LearningAgent() {
             <Button type="primary" icon={<RobotOutlined />} onClick={runMasterAgent} loading={runningAgent}>
               运行总 Agent
             </Button>
+            {plan.snapshot.weakPoints.length ? (
+              <Button
+                icon={<ThunderboltOutlined />}
+                onClick={startWeakPointLoop}
+                loading={startingWeakPointLoop}
+              >
+                开始薄弱点闭环
+              </Button>
+            ) : null}
           </Space>
         </Space>
       </Card>
