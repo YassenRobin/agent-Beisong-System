@@ -133,6 +133,7 @@ async function main() {
   assert.equal(recommendation.summary.wrong, 1);
 
   const generatedFromMaster = await runMasterAgent({
+    persist: false,
     askAi: async () => JSON.stringify({
       tool_calls: [
         { tool: 'question.agent_generate', params: { goal: 'focus_weak_point' } },

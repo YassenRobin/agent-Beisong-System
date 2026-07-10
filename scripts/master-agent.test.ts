@@ -20,6 +20,7 @@ const snapshot: LearningAgentSnapshot = {
 async function main() {
   const deterministicExecuted: string[] = [];
   const badJsonRun = await runMasterAgent({
+    persist: false,
     snapshot,
     askAi: async () => 'not json at all',
     handlers: {
@@ -41,6 +42,7 @@ async function main() {
 
   const aiExecuted: string[] = [];
   const aiRun = await runMasterAgent({
+    persist: false,
     snapshot,
     askAi: async () => JSON.stringify({
       tool_calls: [
@@ -63,6 +65,7 @@ async function main() {
   assert.equal(aiRun.steps[0].tool, 'question.agent_generate');
 
   const dangerousRun = await runMasterAgent({
+    persist: false,
     snapshot,
     askAi: async () => JSON.stringify({ tool_calls: [{ tool: 'question.delete', params: { id: 'q_1' } }] }),
     handlers: {

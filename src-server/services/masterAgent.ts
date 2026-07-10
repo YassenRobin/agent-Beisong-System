@@ -4,12 +4,19 @@ import type { AgentToolCall, AgentToolExecutionResult, AgentToolHandlers, AgentT
 import { executeAgentToolCalls, normalizeAgentToolCall } from './agentTools';
 import type { LearningAgentSnapshot } from './learningAgent';
 import { getLearningAgentPlan } from './learningAgent';
+import {
+  createAgentRun,
+  createAgentSteps,
+  recordAgentStepResult,
+  transitionAgentRun,
+} from './agentRuntime';
 
 export type MasterAgentStep = AgentToolExecutionResult & {
   risk?: AgentToolCall['risk'];
 };
 
 export type MasterAgentRun = {
+  run_id?: string;
   mode: 'ai' | 'deterministic';
   status: 'completed' | 'partial' | 'failed';
   title: string;
@@ -29,6 +36,7 @@ type RunMasterAgentOptions = {
   snapshot?: LearningAgentSnapshot;
   askAi?: (prompt: string, snapshot: LearningAgentSnapshot) => Promise<string>;
   handlers?: AgentToolHandlers;
+  persist?: boolean;
 };
 
 function getToolCallArray(raw: unknown): RawToolCall[] {
@@ -144,7 +152,16 @@ function pickNextRoute(steps: MasterAgentStep[]): string {
 
 export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<MasterAgentRun> {
   const snapshot = opts.snapshot || getLearningAgentPlan().snapshot;
+  const persistedRun = opts.persist === false
+    ? null
+    : createAgentRun({
+      agent_type: 'master_learning_agent',
+      title: '总 Agent 学习调度',
+      input_snapshot: snapshot,
+    });
+  if (persistedRun) transitionAgentRun(persistedRun.id, 'observing');
   const prompt = buildPrompt(snapshot);
+  if (persistedRun) transitionAgentRun(persistedRun.id, 'planning');
   let mode: MasterAgentRun['mode'] = 'ai';
   let calls: AgentToolCall[] = [];
 
@@ -162,14 +179,22 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
     calls = deterministicToolCalls(snapshot);
   }
 
+  if (persistedRun) {
+    createAgentSteps(persistedRun.id, calls);
+    transitionAgentRun(persistedRun.id, 'executing', { mode, plan: { tool_calls: calls } });
+  }
   const executions = await executeAgentToolCalls(calls, { handlers: opts.handlers });
+  if (persistedRun) {
+    executions.forEach((execution, index) => recordAgentStepResult(persistedRun.id, index, execution));
+  }
   const steps = executions.map((execution, index) => ({
     ...execution,
     risk: calls[index]?.risk,
   }));
   const failed = steps.some((step) => step.status === 'failed');
 
-  return {
+  const result: MasterAgentRun = {
+    run_id: persistedRun?.id,
     mode,
     status: failed ? 'partial' : 'completed',
     title: mode === 'ai' ? '总 Agent 协作完成' : '总 Agent 已用确定性策略接管',
@@ -179,4 +204,13 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
     steps,
     next_route: pickNextRoute(steps),
   };
+  if (persistedRun) {
+    transitionAgentRun(persistedRun.id, 'completed', {
+      mode,
+      summary: result.summary,
+      result,
+      next_route: result.next_route,
+    });
+  }
+  return result;
 }

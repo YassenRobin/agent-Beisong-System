@@ -181,6 +181,23 @@ export function listAgentGoals(status?: AgentGoalStatus): AgentGoal[] {
   return rows.map(mapGoal);
 }
 
+export function transitionAgentGoal(id: string, nextStatus: AgentGoalStatus): AgentGoal {
+  const current = getAgentGoal(id);
+  if (!current) throw new Error('Agent goal does not exist.');
+  if (current.status !== nextStatus && current.status !== 'active') {
+    throw new Error(`Invalid Agent goal transition: ${current.status} -> ${nextStatus}`);
+  }
+  if (current.status === 'active' && nextStatus === 'active') return current;
+
+  const now = nowIso();
+  execute(
+    `UPDATE agent_goals SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?`,
+    [nextStatus, now, nextStatus === 'completed' ? now : null, id],
+  );
+  appendAgentEvent({ goal_id: id, event_type: `goal.${nextStatus}`, payload: { previous_status: current.status } });
+  return getAgentGoal(id)!;
+}
+
 export function createAgentRun(input: {
   goal_id?: string;
   parent_run_id?: string;

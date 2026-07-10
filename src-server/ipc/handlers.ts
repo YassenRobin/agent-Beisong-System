@@ -13,6 +13,7 @@ import * as rogue from '../services/rogue';
 import * as learningAgent from '../services/learningAgent';
 import * as agentTools from '../services/agentTools';
 import * as masterAgent from '../services/masterAgent';
+import * as agentRuntime from '../services/agentRuntime';
 import * as training from '../services/training';
 import * as ai from '../ai/service';
 import { judgeLocally } from '../services/localJudge';
@@ -30,6 +31,12 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
     'agent:ai-plan': async () => learningAgent.generateAiLearningPlan(),
     'agent:tools': () => agentTools.getAgentToolMetadata(),
     'agent:run': async () => masterAgent.runMasterAgent(),
+    'agent:runs': (p) => agentRuntime.listAgentRuns(p || {}),
+    'agent:resumable-runs': (p) => agentRuntime.listResumableAgentRuns(p?.limit || 20),
+    'agent:run-detail': (p) => agentRuntime.getAgentRunDetail(p.id),
+    'agent:goals': (p) => agentRuntime.listAgentGoals(p?.status),
+    'agent:goal-create': (p) => agentRuntime.createAgentGoal(p),
+    'agent:goal-status': (p) => agentRuntime.transitionAgentGoal(p.id, p.status),
     'agent:execute-plan': async (p) => learningAgent.executeAiLearningPlan(p.plan),
     'agent:execute-step': async (p) => {
       const plan = await learningAgent.executeAiLearningPlan({ ...p.plan, steps: [p.step] });
