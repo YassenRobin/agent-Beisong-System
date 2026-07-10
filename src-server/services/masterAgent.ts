@@ -128,6 +128,7 @@ ${JSON.stringify({
     weak_points: snapshot.weakPoints,
     wrong_items: snapshot.wrongItems,
     dungeons: snapshot.dungeons,
+    learner_profile: snapshot.learnerProfile || null,
   }, null, 2)}`;
 }
 

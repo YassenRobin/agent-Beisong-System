@@ -3,6 +3,7 @@
  */
 import { execute, nowIso, selectAll, selectOne, transaction, uid } from '../db/helpers';
 import type { GeneratedQuestion, JudgeResult } from '../ai/types';
+import { refreshLearnerModelForQuestion, refreshMasteryScope } from './learnerModel';
 
 export type QuestionInput = {
   text_id: string;
@@ -150,7 +151,13 @@ export function updateQuestion(id: string, input: Partial<QuestionInput>): Quest
 }
 
 export function deleteQuestion(id: string) {
+  const question = getQuestion(id);
+  const weakPointIds = selectAll<{ weak_point_id: string }>(
+    `SELECT weak_point_id FROM weak_point_questions WHERE question_id = ?`,
+    [id],
+  );
   transaction(() => {
+    execute(`DELETE FROM learner_mastery WHERE scope_type = 'question' AND scope_id = ?`, [id]);
     execute(`DELETE FROM question_stats WHERE question_id = ?`, [id]);
     execute(`DELETE FROM attempts WHERE question_id = ?`, [id]);
     execute(`DELETE FROM wrong_items WHERE question_id = ?`, [id]);
@@ -160,6 +167,11 @@ export function deleteQuestion(id: string) {
     execute(`DELETE FROM dungeon_questions WHERE question_id = ?`, [id]);
     execute(`DELETE FROM questions WHERE id = ?`, [id]);
   });
+  if (question) {
+    refreshMasteryScope('article', question.text_id);
+    refreshMasteryScope('question_type', question.type);
+  }
+  for (const item of weakPointIds) refreshMasteryScope('weak_point', item.weak_point_id);
 }
 
 export function setQuestionEnabled(id: string, enabled: boolean) {
@@ -221,6 +233,11 @@ export function recordAttempt(opts: {
   }
 
   refreshLinkedWeakPointStats(opts.question_id);
+  try {
+    refreshLearnerModelForQuestion(opts.question_id);
+  } catch (err) {
+    console.error('[learner-model] refresh failed:', err);
+  }
 
   return id;
 }

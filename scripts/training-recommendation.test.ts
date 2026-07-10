@@ -24,6 +24,13 @@ const filtered = buildTrainingRecommendation([
 
 assert.deepEqual(filtered.question_ids, ['q_blank']);
 
+const reviewDue = buildTrainingRecommendation([
+  { id: 'q_due', text_id: 'txt_1', type: 'blank', star: 1, attempt_count: 8, wrong_count: 0, accuracy: 1, review_due: true, forgetting_risk: 1 },
+  { id: 'q_fresh', text_id: 'txt_1', type: 'blank', star: 1, attempt_count: 0, wrong_count: 0, accuracy: null },
+], { limit: 1 });
+
+assert.deepEqual(reviewDue.question_ids, ['q_due']);
+
 const session = summarizeTrainingSession([
   { question_id: 'q_1', is_correct: true, score: 1 },
   { question_id: 'q_2', is_correct: false, score: 0, error_type: 'missing' },

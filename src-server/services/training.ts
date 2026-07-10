@@ -11,6 +11,9 @@ export type TrainingQuestionCandidate = {
   last_attempt_at?: string | null;
   weak_point_id?: string | null;
   is_wrong_active?: boolean;
+  mastery_score?: number | null;
+  forgetting_risk?: number | null;
+  review_due?: boolean;
 };
 
 export type TrainingRecommendation = {
@@ -50,6 +53,8 @@ function scoreCandidate(candidate: TrainingQuestionCandidate): number {
 
   if (candidate.is_wrong_active) score += 80;
   if (candidate.weak_point_id) score += 50;
+  if (candidate.review_due) score += 40;
+  score += Math.round(Math.min(1, candidate.forgetting_risk || 0) * 60);
   score += Math.min(wrongCount, 5) * 12;
   if (typeof accuracy === 'number') score += Math.round((1 - accuracy) * 40);
   if (attemptCount === 0) score += 20;
@@ -128,16 +133,24 @@ export function getTrainingRecommendation(opts: { limit?: number; type?: string 
        s.accuracy,
        s.last_attempt_at,
        wq.weak_point_id,
+       lm.mastery_score,
+       CASE
+         WHEN lm.last_attempt_at IS NULL THEN 0
+         ELSE MIN(1.0, MAX(0.0, (julianday('now') - julianday(lm.last_attempt_at)) / MAX(1, lm.review_interval_days)))
+       END AS forgetting_risk,
+       CASE WHEN lm.next_review_at IS NOT NULL AND julianday(lm.next_review_at) <= julianday('now') THEN 1 ELSE 0 END AS review_due,
        CASE WHEN wi.id IS NULL THEN 0 ELSE 1 END AS is_wrong_active
      FROM questions q
        LEFT JOIN question_stats s ON s.question_id = q.id
        LEFT JOIN weak_point_questions wq ON wq.question_id = q.id
        LEFT JOIN wrong_items wi ON wi.question_id = q.id AND wi.status = 'active'
+       LEFT JOIN learner_mastery lm ON lm.scope_type = 'question' AND lm.scope_id = q.id
      WHERE q.enabled = 1
      ORDER BY q.created_at DESC`,
   ).map((item: any) => ({
     ...item,
     is_wrong_active: !!item.is_wrong_active,
+    review_due: !!item.review_due,
   }));
 
   return buildTrainingRecommendation(candidates, opts);

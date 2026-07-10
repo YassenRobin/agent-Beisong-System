@@ -3,6 +3,8 @@ import { safeJsonParse } from './json';
 import { selectAll, selectOne } from '../db/helpers';
 import type { AgentToolCall, AgentToolHandlers } from './agentTools';
 import { executeAgentToolCalls, normalizeAgentToolCall } from './agentTools';
+import { getLearnerProfile } from './learnerModel';
+import type { LearnerProfile } from './learnerModel';
 
 const MIN_QUESTIONS_PER_TEXT = 2;
 
@@ -105,6 +107,7 @@ export type LearningAgentSnapshot = {
     favorite?: number | null;
   }>;
   activeProvider: { id: string; name: string; provider_type: string } | null;
+  learnerProfile?: LearnerProfile;
 };
 
 const AI_STEP_ROUTES: Record<AiLearningPlanStepType, string> = {
@@ -445,6 +448,7 @@ ${JSON.stringify({
     wrong_items: wrongItems,
     recent_runs: snapshot.recentRuns,
     dungeons,
+    learner_profile: snapshot.learnerProfile || null,
   }, null, 2)}
 
 输出示例：
@@ -600,6 +604,7 @@ export function getLearningAgentPlan(): LearningAgentPlan {
      ORDER BY favorite DESC, star DESC, created_at DESC
      LIMIT 5`,
   );
+  const learnerProfile = getLearnerProfile();
 
   return buildLearningAgentPlan({
     texts,
@@ -610,6 +615,7 @@ export function getLearningAgentPlan(): LearningAgentPlan {
     recentRuns,
     dungeons,
     activeProvider,
+    learnerProfile,
   });
 }
 

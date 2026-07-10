@@ -2,6 +2,7 @@
  * 老师易错点服务
  */
 import { execute, nowIso, selectAll, selectOne, transaction, uid } from '../db/helpers';
+import { refreshMasteryScope } from './learnerModel';
 
 export type WeakPointInput = {
   title: string;
@@ -125,6 +126,7 @@ export function updateWeakPoint(id: string, input: Partial<WeakPointInput>): Wea
 
 export function deleteWeakPoint(id: string) {
   transaction(() => {
+    execute(`DELETE FROM learner_mastery WHERE scope_type = 'weak_point' AND scope_id = ?`, [id]);
     execute(`DELETE FROM question_favorites WHERE weak_point_id = ?`, [id]);
     execute(`DELETE FROM weak_point_questions WHERE weak_point_id = ?`, [id]);
     execute(`DELETE FROM weak_point_stats WHERE weak_point_id = ?`, [id]);

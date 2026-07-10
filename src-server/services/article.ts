@@ -2,6 +2,7 @@
  * 文章服务:CRUD + 段落/句子管理
  */
 import { execute, nowIso, selectAll, selectOne, transaction, uid } from '../db/helpers';
+import { refreshMasteryScope } from './learnerModel';
 
 export type TextInput = {
   title: string;
@@ -173,7 +174,13 @@ function assertUniqueTitle(title: string, excludeId?: string) {
 }
 
 export function deleteText(id: string) {
+  const questionRows = selectAll<{ id: string; type: string }>(`SELECT id, type FROM questions WHERE text_id = ?`, [id]);
+  const weakPointIds = selectAll<{ id: string }>(`SELECT id FROM weak_points WHERE text_id = ?`, [id]);
+  const questionTypes = [...new Set(questionRows.map((item) => item.type))];
   transaction(() => {
+    execute(`DELETE FROM learner_mastery WHERE scope_type = 'article' AND scope_id = ?`, [id]);
+    for (const item of questionRows) execute(`DELETE FROM learner_mastery WHERE scope_type = 'question' AND scope_id = ?`, [item.id]);
+    for (const item of weakPointIds) execute(`DELETE FROM learner_mastery WHERE scope_type = 'weak_point' AND scope_id = ?`, [item.id]);
     execute(`DELETE FROM question_favorites WHERE text_id = ?`, [id]);
     execute(`DELETE FROM question_favorites WHERE question_id IN (SELECT id FROM questions WHERE text_id = ?)`, [id]);
     execute(`DELETE FROM question_favorites WHERE weak_point_id IN (SELECT id FROM weak_points WHERE text_id = ?)`, [id]);
@@ -194,6 +201,7 @@ export function deleteText(id: string) {
     execute(`DELETE FROM weak_points WHERE text_id = ?`, [id]);
     execute(`DELETE FROM texts WHERE id = ?`, [id]);
   });
+  for (const type of questionTypes) refreshMasteryScope('question_type', type);
 }
 
 // =============== 段落 / 句子 ===============

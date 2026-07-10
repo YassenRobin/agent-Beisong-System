@@ -370,6 +370,24 @@ CREATE TABLE IF NOT EXISTS agent_events (
   FOREIGN KEY (goal_id) REFERENCES agent_goals(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS learner_mastery (
+  scope_type TEXT NOT NULL,
+  scope_id TEXT NOT NULL,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  correct_count INTEGER NOT NULL DEFAULT 0,
+  accuracy REAL NOT NULL DEFAULT 0,
+  consecutive_correct INTEGER NOT NULL DEFAULT 0,
+  consecutive_wrong INTEGER NOT NULL DEFAULT 0,
+  mastery_score REAL NOT NULL DEFAULT 0.5,
+  forgetting_risk REAL NOT NULL DEFAULT 0,
+  review_interval_days INTEGER NOT NULL DEFAULT 1,
+  last_attempt_at TEXT,
+  next_review_at TEXT,
+  evidence_json TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (scope_type, scope_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_questions_text ON questions(text_id);
 CREATE INDEX IF NOT EXISTS idx_questions_paragraph ON questions(paragraph_id);
 CREATE INDEX IF NOT EXISTS idx_paragraphs_text ON paragraphs(text_id);
@@ -384,4 +402,5 @@ CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status, updated_a
 CREATE INDEX IF NOT EXISTS idx_agent_runs_goal ON agent_runs(goal_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_agent_steps_run ON agent_steps(run_id, step_index);
 CREATE INDEX IF NOT EXISTS idx_agent_events_run ON agent_events(run_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_learner_mastery_review ON learner_mastery(next_review_at, forgetting_risk);
 `;

@@ -36,6 +36,22 @@ type AgentPlan = {
     recentRuns: unknown[];
     dungeons: unknown[];
     activeProvider: { name: string } | null;
+    learnerProfile?: {
+      summary: {
+        tracked_scopes: number;
+        due_reviews: number;
+        average_mastery: number;
+      };
+      priorities: Array<{
+        scope_type: string;
+        scope_id: string;
+        label: string;
+        mastery_score: number;
+        forgetting_risk: number;
+        review_due: boolean;
+        next_review_at: string;
+      }>;
+    };
   };
 };
 
@@ -486,6 +502,41 @@ export default function LearningAgent() {
         </Col>
       </Row>
 
+      {plan.snapshot.learnerProfile ? (
+        <Card title="学生模型" className="textbook-card">
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space wrap>
+              <Tag color="purple">已跟踪 {plan.snapshot.learnerProfile.summary.tracked_scopes} 项</Tag>
+              <Tag color={plan.snapshot.learnerProfile.summary.due_reviews ? 'red' : 'green'}>
+                待复习 {plan.snapshot.learnerProfile.summary.due_reviews} 项
+              </Tag>
+              <Tag color="blue">
+                平均掌握度 {Math.round(plan.snapshot.learnerProfile.summary.average_mastery * 100)}%
+              </Tag>
+            </Space>
+            <List
+              size="small"
+              locale={{ emptyText: '完成训练后，Agent 会逐步建立学生模型。' }}
+              dataSource={plan.snapshot.learnerProfile.priorities.slice(0, 5)}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={(
+                      <Space wrap>
+                        <span>{item.label}</span>
+                        <Tag>{learnerScopeLabel(item.scope_type)}</Tag>
+                        {item.review_due ? <Tag color="red">该复习了</Tag> : null}
+                      </Space>
+                    )}
+                    description={`掌握度 ${Math.round(item.mastery_score * 100)}% · 遗忘风险 ${Math.round(item.forgetting_risk * 100)}% · 下次复习 ${new Date(item.next_review_at).toLocaleDateString()}`}
+                  />
+                </List.Item>
+              )}
+            />
+          </Space>
+        </Card>
+      ) : null}
+
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={10}>
           <Card title="诊断依据" className="textbook-card">
@@ -527,4 +578,11 @@ export default function LearningAgent() {
       </Row>
     </Space>
   );
+}
+
+function learnerScopeLabel(scopeType: string) {
+  if (scopeType === 'article') return '文章';
+  if (scopeType === 'weak_point') return '薄弱点';
+  if (scopeType === 'question_type') return '题型';
+  return '题目';
 }
