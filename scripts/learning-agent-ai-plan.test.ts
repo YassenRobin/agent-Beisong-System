@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { normalizeAiLearningPlan } from '../src-server/services/learningAgent';
+import { executeAiLearningPlan, normalizeAiLearningPlan } from '../src-server/services/learningAgent';
 
 const snapshot = {
   texts: 5,
   questions: 12,
+  articleIds: ['txt_1', 'txt_2'],
   weakPoints: [
     { id: 'wp_1', title: '通假字', text_id: 'txt_1', accuracy: 0.4, wrong_count: 4, question_count: 6 },
   ],
@@ -51,7 +52,10 @@ assert.equal(plan.steps[0].route, '/ai-generate');
 assert.deepEqual(plan.steps[0].text_ids, ['txt_1', 'txt_2', 'txt_3', 'txt_4', 'txt_5']);
 assert.equal(plan.steps[0].count_per_text, 5);
 assert.deepEqual(plan.steps[0].question_types, ['blank', 'context_recitation']);
+assert.equal(plan.steps[0].tool_call?.tool, 'question.generate_for_articles');
+assert.deepEqual(plan.steps[0].tool_call?.params.text_ids, ['txt_1', 'txt_2']);
 assert.equal(plan.steps[1].route, '/weak-points');
+assert.equal(plan.steps[1].tool_call?.tool, 'question.generate_for_weak_point');
 
 const fallback = normalizeAiLearningPlan({ steps: [] }, snapshot);
 
@@ -94,3 +98,50 @@ assert.equal(chineseVariant.steps[0].type, 'generate_questions');
 assert.deepEqual(chineseVariant.steps[0].question_types, ['blank', 'context_recitation']);
 assert.equal(chineseVariant.steps[1].type, 'practice_weak_point');
 assert.equal(chineseVariant.steps[2].route, '/rogue/dg_1');
+
+const toolPlan = normalizeAiLearningPlan({
+  title: 'Agent tool plan',
+  steps: [
+    {
+      type: 'generate_questions',
+      title: 'Generate safely',
+      reason: 'Question coverage is low',
+      tool_call: {
+        tool: 'question.generate_for_articles',
+        params: {
+          text_ids: ['txt_1', 'txt_2', 'bad_txt'],
+          count_per_text: 3,
+          question_types: ['blank', 'bad_type'],
+        },
+      },
+    },
+    {
+      type: 'review_wrong',
+      title: 'Dangerous tool',
+      reason: 'Should be dropped',
+      tool_call: { tool: 'question.delete', params: { id: 'q_1' } },
+    },
+  ],
+}, snapshot);
+
+assert.equal(toolPlan.steps[0].tool_call?.tool, 'question.generate_for_articles');
+assert.deepEqual(toolPlan.steps[0].tool_call?.params.text_ids, ['txt_1', 'txt_2']);
+assert.equal(toolPlan.steps[0].requires_confirmation, true);
+assert.equal(toolPlan.steps[1].tool_call, undefined);
+
+async function main() {
+  const executed = await executeAiLearningPlan(toolPlan, {
+    handlers: {
+      'question.generate_for_articles': async () => ({ created_count: 2, route: '/questions' }),
+    } as any,
+  });
+
+  assert.equal(executed.steps[0].execution_status, 'completed');
+  assert.deepEqual(executed.steps[0].result, { created_count: 2, route: '/questions' });
+  assert.equal(executed.steps[1].execution_status, undefined);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

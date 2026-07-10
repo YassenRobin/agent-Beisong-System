@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
 import { calculateRogueDamage } from '../../src-server/services/rogueDamage';
+import { errorTypeLabel, roomTypeLabel } from '../utils/labels';
 
 type Question = {
   id: string;
@@ -315,7 +316,7 @@ export default function RoguePlay() {
           <Alert
             style={{ marginTop: 16 }}
             type={result.is_correct ? 'success' : 'error'}
-            message={result.is_correct ? '正确' : `错误 (扣 ${lastDamage.toFixed(1)} 心) · ${result.error_type}`}
+            message={result.is_correct ? '正确' : `错误 (扣 ${lastDamage.toFixed(1)} 心) · ${errorTypeLabel(result.error_type)}`}
             description={
               <Space direction="vertical" size={6} style={{ width: '100%' }}>
                 <div><b>你的答案:</b> <span className="serif">{choice || input}</span></div>
@@ -359,12 +360,6 @@ function HeartBar({ hearts, max }: { hearts: number; max: number }) {
   );
 }
 
-function roomTypeLabel(t: string) {
-  return ({
-    safe: '安全房', normal: '普通房', danger: '危险房', elite: '精英房',
-    weak_point: '易错点房', rest: '休息房', boss: 'Boss 房',
-  } as any)[t] || t;
-}
 function roomColor(t: string) {
   return ({
     safe: 'green', normal: 'blue', danger: 'orange', elite: 'purple',

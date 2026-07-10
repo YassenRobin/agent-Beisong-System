@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card, Typography, Space, Tag, Empty, Button, message, Table } from 'antd';
 import { CheckOutlined, PlusOutlined } from '@ant-design/icons';
 import { invoke } from '../api/ipc';
+import { errorTypeLabel } from '../utils/labels';
 
 export default function WrongBook() {
   const [items, setItems] = useState<any[]>([]);
@@ -43,8 +44,8 @@ export default function WrongBook() {
             dataSource={items}
             pagination={{ pageSize: 20 }}
             columns={[
-              { title: '文章', dataIndex: 'text_id', width: 140, render: (v) => texts.find((t) => t.id === v)?.title || v },
-              { title: '错误类型', dataIndex: 'error_type', width: 140, render: (v) => <Tag color="orange">{v || 'other'}</Tag> },
+              { title: '文章', dataIndex: 'text_id', width: 140, render: (v) => texts.find((t) => t.id === v)?.title || '未知文章' },
+              { title: '错误类型', dataIndex: 'error_type', width: 140, render: (v) => <Tag color="orange">{errorTypeLabel(v)}</Tag> },
               { title: '标准答案', dataIndex: 'expected', render: (v) => <span className="serif">{v}</span> },
               { title: '你的答案', dataIndex: 'actual', render: (v) => <span className="serif">{v}</span> },
               { title: '错次', dataIndex: 'count', width: 80 },

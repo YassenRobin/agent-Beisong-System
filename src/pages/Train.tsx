@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Card, Typography, Space, Button, Tag, Input, Radio, message, Alert, Result, Divider } from 'antd';
+import { Card, Typography, Space, Button, Tag, Input, Radio, message, Alert, Result, Divider, Statistic, Row, Col } from 'antd';
 import { StarOutlined, StarFilled } from '@ant-design/icons';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
+import { errorTypeLabel, questionTypeLabel } from '../utils/labels';
 
 type Question = {
   id: string;
@@ -17,6 +18,25 @@ type Question = {
   explanation?: string;
 };
 
+type TrainingRecommendation = {
+  title: string;
+  description: string;
+  question_ids: string[];
+  summary: {
+    total: number;
+    wrong: number;
+    weak: number;
+    fresh: number;
+  };
+};
+
+type TrainingAttempt = {
+  question_id: string;
+  is_correct: boolean;
+  score: number;
+  error_type?: string;
+};
+
 export default function Train() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [idx, setIdx] = useState(0);
@@ -26,23 +46,32 @@ export default function Train() {
   const [filter, setFilter] = useState<'all' | 'choice' | 'blank' | 'context_recitation' | 'pure_recitation'>('all');
   const [busy, setBusy] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [recommendation, setRecommendation] = useState<TrainingRecommendation | null>(null);
+  const [attempts, setAttempts] = useState<TrainingAttempt[]>([]);
+  const [finished, setFinished] = useState(false);
 
   const load = async () => {
     try {
       const all = await invoke<Question[]>('question:list', { enabled: 1 });
       const favorites = await invoke<any[]>('favorite:list-questions', {});
+      const rec = await invoke<TrainingRecommendation>('training:recommendation', { type: filter, limit: 10 });
       setFavoriteIds(new Set(favorites.map((f) => f.question_id)));
-      const list = filter === 'all' ? all : all.filter((q) => q.type === filter);
+      setRecommendation(rec);
+      const recIds = new Set(rec.question_ids || []);
+      const recommended = (rec.question_ids || [])
+        .map((id) => all.find((q) => q.id === id))
+        .filter(Boolean) as Question[];
+      const fallback = (filter === 'all' ? all : all.filter((q) => q.type === filter))
+        .filter((q) => !recIds.has(q.id));
+      const list = [...recommended, ...fallback].slice(0, Math.max(10, recommended.length));
       // 打乱
-      for (let i = list.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [list[i], list[j]] = [list[j], list[i]];
-      }
       setQuestions(list);
       setIdx(0);
       setInput('');
       setChoice('');
       setResult(null);
+      setAttempts([]);
+      setFinished(false);
     } catch (e: any) { message.error(e.message); }
   };
 
@@ -89,6 +118,15 @@ export default function Train() {
         star: cur.star,
       });
       setResult(res);
+      setAttempts((prev) => ([
+        ...prev,
+        {
+          question_id: cur.id,
+          is_correct: !!res.is_correct,
+          score: Number(res.score || 0),
+          error_type: res.error_type,
+        },
+      ]));
     } catch (e: any) {
       message.error(e.message);
     } finally {
@@ -97,10 +135,14 @@ export default function Train() {
   };
 
   const next = () => {
+    if (idx + 1 >= questions.length) {
+      setFinished(true);
+      return;
+    }
     setInput('');
     setChoice('');
     setResult(null);
-    setIdx((i) => (i + 1 >= questions.length ? 0 : i + 1));
+    setIdx((i) => i + 1);
   };
 
   if (questions.length === 0) {
@@ -117,6 +159,53 @@ export default function Train() {
   }
 
   if (!cur) return null;
+
+  const correctCount = attempts.filter((item) => item.is_correct).length;
+  const accuracy = attempts.length ? Math.round((correctCount / attempts.length) * 100) : 0;
+  const averageScore = attempts.length
+    ? Math.round((attempts.reduce((sum, item) => sum + item.score, 0) / attempts.length) * 100)
+    : 0;
+  const errorTypes = attempts.reduce<Record<string, number>>((acc, item) => {
+    if (item.is_correct) return acc;
+    const key = item.error_type || 'other';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  if (finished) {
+    return (
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Typography.Title level={3} style={{ margin: 0 }}>普通训练总结</Typography.Title>
+        <Card className="textbook-card">
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert
+              type={accuracy >= 80 ? 'success' : 'info'}
+              showIcon
+              message={accuracy >= 80 ? '本轮训练完成得不错' : '本轮训练已完成'}
+              description={recommendation?.description || '已根据本轮答题结果生成总结。'}
+            />
+            <Row gutter={[16, 16]}>
+              <Col xs={12} md={6}><Statistic title="题数" value={attempts.length} /></Col>
+              <Col xs={12} md={6}><Statistic title="正确" value={correctCount} /></Col>
+              <Col xs={12} md={6}><Statistic title="正确率" value={accuracy} suffix="%" /></Col>
+              <Col xs={12} md={6}><Statistic title="平均得分" value={averageScore} suffix="%" /></Col>
+            </Row>
+            {Object.keys(errorTypes).length ? (
+              <Space wrap>
+                {Object.entries(errorTypes).map(([key, count]) => (
+                  <Tag key={key} color="red">{errorTypeLabel(key)}: {count}</Tag>
+                ))}
+              </Space>
+            ) : null}
+            <Space>
+              <Button type="primary" onClick={load}>再来一轮 Agent 推荐训练</Button>
+              <Button onClick={() => setFinished(false)}>回看最后一题</Button>
+            </Space>
+          </Space>
+        </Card>
+      </Space>
+    );
+  }
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -135,6 +224,15 @@ export default function Train() {
       </Space>
 
       <Card className="textbook-card">
+        {recommendation ? (
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="info"
+            showIcon
+            message={recommendation.title}
+            description={`${recommendation.description} 共 ${recommendation.summary.total} 题，错题 ${recommendation.summary.wrong}，薄弱点 ${recommendation.summary.weak}，新题 ${recommendation.summary.fresh}。`}
+          />
+        ) : null}
         <Space wrap style={{ marginBottom: 12 }}>
           <Tag color="purple">{typeLabel(cur.type)}</Tag>
           <Tag color="orange">{'★'.repeat(cur.star)}</Tag>
@@ -175,7 +273,7 @@ export default function Train() {
           <Alert
             style={{ marginTop: 16 }}
             type={result.is_correct ? 'success' : 'error'}
-            message={result.is_correct ? `正确 (得分 ${(result.score * 100).toFixed(0)})` : `错误 (得分 ${(result.score * 100).toFixed(0)}) · ${result.error_type || 'other'}`}
+            message={result.is_correct ? `正确 (得分 ${(result.score * 100).toFixed(0)})` : `错误 (得分 ${(result.score * 100).toFixed(0)}) · ${errorTypeLabel(result.error_type)}`}
             description={
               <Space direction="vertical" size={6} style={{ width: '100%' }}>
                 <div><b>你的答案:</b> <span className="serif">{choice || input}</span></div>
@@ -201,14 +299,7 @@ export default function Train() {
 }
 
 function typeLabel(t: string) {
-  return ({
-    choice: '选择题',
-    blank: '挖空题',
-    context_blank: '文脉挖空',
-    context_recitation: '文脉默写',
-    pure_recitation: '纯默写',
-    ordering: '排序题',
-  } as any)[t] || t;
+  return questionTypeLabel(t);
 }
 
 function optionKey(index: number) {

@@ -4,15 +4,7 @@ import { DeleteOutlined, EyeOutlined, FolderAddOutlined, PlayCircleOutlined, Plu
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
-
-const TYPE_LABEL: Record<string, string> = {
-  choice: '选择题',
-  blank: '挖空题',
-  context_blank: '文脉挖空',
-  context_recitation: '文脉默写',
-  pure_recitation: '纯默写',
-  ordering: '排序题',
-};
+import { questionTypeLabel } from '../utils/labels';
 
 export default function Favorites() {
   const [favorites, setFavorites] = useState<any[]>([]);
@@ -132,7 +124,7 @@ export default function Favorites() {
                           checked={selectedQuestionIds.includes(f.question_id)}
                           onChange={(e) => toggleSelected(f.question_id, e.target.checked)}
                         />
-                        <Tag color="purple">{TYPE_LABEL[f.type] || f.type}</Tag>
+                        <Tag color="purple">{questionTypeLabel(f.type)}</Tag>
                         <Tag color="orange">{'★'.repeat(f.star || 1)}</Tag>
                         <Typography.Text type="secondary">{textTitleById.get(f.text_id)}</Typography.Text>
                         {f.folder_names ? <Tag color="cyan">{f.folder_names}</Tag> : null}

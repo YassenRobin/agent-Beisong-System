@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { invoke } from '../api/ipc';
+import { questionTypeListLabel } from '../utils/labels';
 
 type AgentAction = {
   type: string;
@@ -43,6 +44,15 @@ type AiPlanStep = {
   title: string;
   reason: string;
   route: string;
+  tool_call?: {
+    tool: string;
+    risk: 'read' | 'write_safe';
+    params: Record<string, unknown>;
+  };
+  requires_confirmation?: boolean;
+  execution_status?: 'pending' | 'running' | 'completed' | 'skipped' | 'failed';
+  result?: any;
+  error?: string;
   text_ids?: string[];
   weak_point_id?: string;
   dungeon_id?: string;
@@ -56,6 +66,21 @@ type AiLearningPlan = {
   rationale: string;
   generated_by: 'ai' | 'fallback';
   steps: AiPlanStep[];
+};
+
+type MasterAgentRun = {
+  mode: 'ai' | 'deterministic';
+  status: 'completed' | 'partial' | 'failed';
+  title: string;
+  summary: string;
+  next_route: string;
+  steps: Array<{
+    tool: string;
+    risk?: 'read' | 'write_safe';
+    status: 'completed' | 'failed' | 'skipped';
+    result?: any;
+    error?: string;
+  }>;
 };
 
 const statusColor: Record<string, string> = {
@@ -76,11 +101,105 @@ function actionIcon(type: string) {
   return <ThunderboltOutlined />;
 }
 
+const executionColor: Record<string, string> = {
+  pending: 'default',
+  running: 'processing',
+  completed: 'green',
+  skipped: 'default',
+  failed: 'red',
+};
+
+const statusLabel: Record<string, string> = {
+  setup: '待建立文章库',
+  needs_api: '需要配置 AI',
+  needs_questions: '题库待扩充',
+  weak_point_focus: '薄弱点优先',
+  wrong_review: '错题待复习',
+  ready: '可以训练',
+};
+
+const executionLabel: Record<string, string> = {
+  pending: '待执行',
+  running: '执行中',
+  completed: '已完成',
+  skipped: '已跳过',
+  failed: '失败',
+  partial: '部分完成',
+};
+
+const riskLabel: Record<string, string> = {
+  read: '读取',
+  write_safe: '安全写入',
+};
+
+const toolLabel: Record<string, string> = {
+  'snapshot.learning_context': '读取学习概况',
+  'article.list_enabled': '读取可用文章',
+  'question.agent_generate': 'AI 出题子 Agent',
+  'question.generate_for_articles': '按文章生成题目',
+  'question.generate_for_weak_point': '薄弱点专项出题',
+  'rogue.generate_and_save': '生成 Rogue 副本',
+  'wrong.review_queue': '读取错题复习队列',
+  'favorite.recommend_questions': '推荐重点题目',
+  'training.start_recommendation': '推荐普通训练',
+};
+
+const routeLabel: Record<string, string> = {
+  '/agent': '学习 Agent',
+  '/questions': '题目管理',
+  '/weak-points': '薄弱点',
+  '/wrong': '错题本',
+  '/train': '普通训练',
+  '/favorites': '收藏夹',
+  '/rogue': 'Rogue 副本',
+};
+
+function routeDisplay(route?: string) {
+  if (!route) return '推荐页面';
+  if (route.startsWith('/rogue/')) return 'Rogue 副本';
+  return routeLabel[route] || '推荐页面';
+}
+
+function errorDisplay(error?: string) {
+  if (!error) return '';
+  if (error === 'Tool handler is not available.') return '该 Agent 工具暂不可用';
+  if (/Weak point does not exist/i.test(error)) return '薄弱点不存在';
+  if (/article does not exist/i.test(error)) return '文章不存在';
+  return error
+    .replace(/question\.generate_for_articles/g, '按文章生成题目')
+    .replace(/question\.generate_for_weak_point/g, '薄弱点专项出题')
+    .replace(/wrong\.review_queue/g, '错题复习队列')
+    .replace(/training\.start_recommendation/g, '普通训练推荐')
+    .replace(/write_safe/g, '安全写入')
+    .replace(/\bcompleted\b/g, '已完成')
+    .replace(/\bfailed\b/g, '失败')
+    .replace(/\bskipped\b/g, '已跳过');
+}
+
+function summarizeToolResult(result: any): string {
+  if (!result || typeof result !== 'object') return '';
+  if (typeof result.created_count === 'number') {
+    const fallback = typeof result.fallback_count === 'number' && result.fallback_count > 0
+      ? `，其中 ${result.fallback_count} 道为系统保底题`
+      : '';
+    return `生成 ${result.created_count} 道题${fallback}`;
+  }
+  if (result.dungeon_id) return '已生成副本';
+  if (Array.isArray(result.items)) return `待复习 ${result.items.length} 项`;
+  if (Array.isArray(result.questions)) return `推荐 ${result.questions.length} 道题`;
+  if (Array.isArray(result.question_ids)) return `推荐 ${result.question_ids.length} 道训练题`;
+  if (result.route) return `下一步：${routeDisplay(result.route)}`;
+  return '';
+}
+
 export default function LearningAgent() {
   const [plan, setPlan] = useState<AgentPlan | null>(null);
   const [aiPlan, setAiPlan] = useState<AiLearningPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [planning, setPlanning] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [runningAgent, setRunningAgent] = useState(false);
+  const [agentRun, setAgentRun] = useState<MasterAgentRun | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -104,6 +223,34 @@ export default function LearningAgent() {
     }
   };
 
+  const executePlan = async () => {
+    if (!aiPlan) return;
+    setExecuting(true);
+    try {
+      setAiPlan(await invoke<AiLearningPlan>('agent:execute-plan', { plan: aiPlan }));
+      message.success('Agent 安全计划执行完成');
+      await load();
+    } catch (e: any) {
+      message.error(e?.message || 'Agent 安全计划执行失败');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const runMasterAgent = async () => {
+    setRunningAgent(true);
+    try {
+      const result = await invoke<MasterAgentRun>('agent:run');
+      setAgentRun(result);
+      message.success(result.mode === 'ai' ? '总 Agent 已完成协作' : '总 Agent 已接管执行');
+      await load();
+    } catch (e: any) {
+      message.error(e?.message || '总 Agent 运行失败');
+    } finally {
+      setRunningAgent(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
@@ -121,7 +268,7 @@ export default function LearningAgent() {
       <Space align="center" wrap>
         <RobotOutlined style={{ color: '#5d3fd3', fontSize: 24 }} />
         <Typography.Title level={3} style={{ margin: 0 }}>学习 Agent</Typography.Title>
-        <Tag color={statusColor[plan.status] || 'purple'}>{plan.status}</Tag>
+        <Tag color={statusColor[plan.status] || 'purple'}>{statusLabel[plan.status] || '学习状态'}</Tag>
         {plan.snapshot.activeProvider ? <Tag color="purple">AI: {plan.snapshot.activeProvider.name}</Tag> : <Tag>未配置 AI</Tag>}
       </Space>
 
@@ -143,9 +290,68 @@ export default function LearningAgent() {
             <Button icon={<RobotOutlined />} onClick={generateAiPlan} loading={planning}>
               生成 AI 学习计划
             </Button>
+            <Button type="primary" icon={<RobotOutlined />} onClick={runMasterAgent} loading={runningAgent}>
+              运行总 Agent
+            </Button>
           </Space>
         </Space>
       </Card>
+
+      {agentRun ? (
+        <Card
+          title={
+            <Space wrap>
+              <RobotOutlined />
+              <span>{agentRun.title}</span>
+              <Tag color={agentRun.mode === 'ai' ? 'purple' : 'blue'}>
+                {agentRun.mode === 'ai' ? 'AI 调度' : '确定性接管'}
+              </Tag>
+              <Tag color={agentRun.status === 'completed' ? 'green' : 'orange'}>
+                {executionLabel[agentRun.status] || '已处理'}
+              </Tag>
+            </Space>
+          }
+          className="textbook-card"
+        >
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              {agentRun.summary}
+            </Typography.Paragraph>
+            <List
+              dataSource={agentRun.steps}
+              renderItem={(item, index) => (
+                <List.Item>
+                  <List.Item.Meta
+                    avatar={<Tag color={item.status === 'completed' ? 'green' : item.status === 'failed' ? 'red' : 'default'}>{index + 1}</Tag>}
+                    title={(
+                      <Space wrap>
+                        <span>{toolLabel[item.tool] || 'Agent 工具'}</span>
+                        {item.risk ? (
+                          <Tag color={item.risk === 'write_safe' ? 'orange' : 'blue'}>
+                            {riskLabel[item.risk] || '安全操作'}
+                          </Tag>
+                        ) : null}
+                        <Tag color={executionColor[item.status] || 'default'}>
+                          {executionLabel[item.status] || '已处理'}
+                        </Tag>
+                      </Space>
+                    )}
+                    description={(
+                      <Space direction="vertical" size={4}>
+                        {item.error ? <Typography.Text type="danger">{errorDisplay(item.error)}</Typography.Text> : null}
+                        {item.result ? <Typography.Text type="secondary">{summarizeToolResult(item.result)}</Typography.Text> : null}
+                      </Space>
+                    )}
+                  />
+                </List.Item>
+              )}
+            />
+            <Link to={agentRun.next_route}>
+              <Button icon={<ThunderboltOutlined />}>进入下一步</Button>
+            </Link>
+          </Space>
+        </Card>
+      ) : null}
 
       {aiPlan ? (
         <Card
@@ -164,6 +370,17 @@ export default function LearningAgent() {
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
               {aiPlan.rationale}
             </Typography.Paragraph>
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<RobotOutlined />}
+                onClick={executePlan}
+                loading={executing}
+                disabled={!aiPlan.steps.some((step) => step.tool_call)}
+              >
+                执行安全计划
+              </Button>
+            </Space>
             <List
               dataSource={aiPlan.steps}
               renderItem={(item, index) => (
@@ -185,8 +402,27 @@ export default function LearningAgent() {
                         {item.type === 'generate_questions' ? (
                           <Typography.Text type="secondary">
                             预计生成 {item.estimated_questions || item.count_per_text || 0} 题
-                            {item.question_types?.length ? ` · ${item.question_types.join(' / ')}` : ''}
+                            {item.question_types?.length ? ` · ${questionTypeListLabel(item.question_types)}` : ''}
                           </Typography.Text>
+                        ) : null}
+                        {item.tool_call ? (
+                          <Space wrap size={4}>
+                            <Tag color={item.tool_call.risk === 'write_safe' ? 'orange' : 'blue'}>
+                              {riskLabel[item.tool_call.risk] || '安全操作'}
+                            </Tag>
+                            <Tag>{toolLabel[item.tool_call.tool] || 'Agent 工具'}</Tag>
+                            {item.execution_status ? (
+                              <Tag color={executionColor[item.execution_status] || 'default'}>
+                                {executionLabel[item.execution_status] || '已处理'}
+                              </Tag>
+                            ) : null}
+                          </Space>
+                        ) : null}
+                        {item.error ? (
+                          <Typography.Text type="danger">{errorDisplay(item.error)}</Typography.Text>
+                        ) : null}
+                        {item.result ? (
+                          <Typography.Text type="secondary">{summarizeToolResult(item.result)}</Typography.Text>
                         ) : null}
                       </Space>
                     )}

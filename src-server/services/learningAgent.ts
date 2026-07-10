@@ -1,6 +1,8 @@
 import { chat } from '../ai/service';
 import { safeJsonParse } from './json';
 import { selectAll, selectOne } from '../db/helpers';
+import type { AgentToolCall, AgentToolHandlers } from './agentTools';
+import { executeAgentToolCalls, normalizeAgentToolCall } from './agentTools';
 
 const MIN_QUESTIONS_PER_TEXT = 2;
 
@@ -51,6 +53,11 @@ export type AiLearningPlanStep = {
   title: string;
   reason: string;
   route: string;
+  tool_call?: AgentToolCall;
+  requires_confirmation?: boolean;
+  execution_status?: 'pending' | 'running' | 'completed' | 'skipped' | 'failed';
+  result?: unknown;
+  error?: string;
   text_ids?: string[];
   weak_point_id?: string;
   dungeon_id?: string;
@@ -69,6 +76,7 @@ export type AiLearningPlan = {
 export type LearningAgentSnapshot = {
   texts: number;
   questions: number;
+  articleIds?: string[];
   weakPoints: Array<{
     id: string;
     title: string;
@@ -243,6 +251,54 @@ function normalizeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean) : [];
 }
 
+function isCompatibleToolCall(type: AiLearningPlanStepType, toolCall: AgentToolCall): boolean {
+  if (type === 'generate_questions') return toolCall.tool === 'question.generate_for_articles';
+  if (type === 'practice_weak_point') return toolCall.tool === 'question.generate_for_weak_point';
+  if (type === 'review_wrong') return toolCall.tool === 'wrong.review_queue';
+  if (type === 'start_rogue') return toolCall.tool === 'rogue.generate_and_save';
+  if (type === 'start_training') return toolCall.tool === 'training.start_recommendation';
+  return false;
+}
+
+function normalizeStepToolCall(raw: unknown, type: AiLearningPlanStepType, snapshot: LearningAgentSnapshot): AgentToolCall | null {
+  const toolCall = normalizeAgentToolCall(raw, {
+    articleIds: snapshot.articleIds || [],
+    weakPointIds: snapshot.weakPoints.map((item) => item.id),
+    dungeonIds: snapshot.dungeons.map((item) => item.id),
+  });
+  return toolCall && isCompatibleToolCall(type, toolCall) ? toolCall : null;
+}
+
+function inferStepToolCall(step: AiLearningPlanStep, snapshot: LearningAgentSnapshot): AgentToolCall | null {
+  if (step.type === 'generate_questions') {
+    return normalizeStepToolCall({
+      tool: 'question.generate_for_articles',
+      params: {
+        text_ids: step.text_ids,
+        count_per_text: step.count_per_text,
+        question_types: step.question_types,
+      },
+    }, step.type, snapshot);
+  }
+  if (step.type === 'practice_weak_point') {
+    return normalizeStepToolCall({
+      tool: 'question.generate_for_weak_point',
+      params: {
+        weak_point_id: step.weak_point_id,
+        count: 4,
+        question_types: ['blank', 'context_recitation'],
+      },
+    }, step.type, snapshot);
+  }
+  if (step.type === 'review_wrong') {
+    return normalizeStepToolCall({ tool: 'wrong.review_queue', params: {} }, step.type, snapshot);
+  }
+  if (step.type === 'start_training') {
+    return normalizeStepToolCall({ tool: 'training.start_recommendation', params: {} }, step.type, snapshot);
+  }
+  return null;
+}
+
 function fallbackAiPlan(snapshot: LearningAgentSnapshot, reason = 'AI 返回计划不可用，已切换为规则建议。'): AiLearningPlan {
   const rulePlan = buildLearningAgentPlan(snapshot);
   return {
@@ -285,6 +341,14 @@ export function normalizeAiLearningPlan(raw: unknown, snapshot: LearningAgentSna
       route: AI_STEP_ROUTES[type],
     };
 
+    const rawToolCall = getField(rawStep, ['tool_call', 'toolCall', 'tool']);
+    const toolCall = normalizeStepToolCall(rawToolCall, type, snapshot);
+    if (toolCall) {
+      step.tool_call = toolCall;
+      step.requires_confirmation = toolCall.risk === 'write_safe';
+      step.execution_status = 'pending';
+    }
+
     if (type === 'generate_questions') {
       const textIds = normalizeStringArray(getField(rawStep, ['text_ids', 'textIds', 'article_ids', 'articleIds', '文章ID', '文章']));
       const selectedTextIds = textIds.slice(0, 5);
@@ -308,6 +372,15 @@ export function normalizeAiLearningPlan(raw: unknown, snapshot: LearningAgentSna
       if (dungeonId) {
         step.dungeon_id = dungeonId;
         step.route = `/rogue/${dungeonId}`;
+      }
+    }
+
+    if (!step.tool_call && !rawToolCall) {
+      const inferredToolCall = inferStepToolCall(step, snapshot);
+      if (inferredToolCall) {
+        step.tool_call = inferredToolCall;
+        step.requires_confirmation = inferredToolCall.risk === 'write_safe';
+        step.execution_status = 'pending';
       }
     }
 
@@ -366,6 +439,7 @@ function buildAiPlannerPrompt(snapshot: LearningAgentSnapshot): string {
 ${JSON.stringify({
     texts: snapshot.texts,
     questions: snapshot.questions,
+    article_ids: snapshot.articleIds || [],
     active_provider: snapshot.activeProvider ? snapshot.activeProvider.name : null,
     weak_points: weakPoints,
     wrong_items: wrongItems,
@@ -489,6 +563,9 @@ export function buildLearningAgentPlan(snapshot: LearningAgentSnapshot): Learnin
 export function getLearningAgentPlan(): LearningAgentPlan {
   const texts = selectOne<{ c: number }>(`SELECT COUNT(*) AS c FROM texts`)?.c || 0;
   const questions = selectOne<{ c: number }>(`SELECT COUNT(*) AS c FROM questions WHERE enabled = 1`)?.c || 0;
+  const articleIds = selectAll<{ id: string }>(
+    `SELECT id FROM texts WHERE enabled = 1 ORDER BY created_at DESC`,
+  ).map((item) => item.id);
   const activeProvider =
     selectOne<{ id: string; name: string; provider_type: string }>(
       `SELECT id, name, provider_type FROM api_providers WHERE is_active = 1 LIMIT 1`,
@@ -527,12 +604,40 @@ export function getLearningAgentPlan(): LearningAgentPlan {
   return buildLearningAgentPlan({
     texts,
     questions,
+    articleIds,
     weakPoints,
     wrongItems,
     recentRuns,
     dungeons,
     activeProvider,
   });
+}
+
+export async function executeAiLearningPlan(
+  plan: AiLearningPlan,
+  opts: { handlers?: AgentToolHandlers } = {},
+): Promise<AiLearningPlan> {
+  const executableSteps = plan.steps.filter((step) => step.tool_call);
+  const results = await executeAgentToolCalls(
+    executableSteps.map((step) => step.tool_call!),
+    { handlers: opts.handlers },
+  );
+  let resultIndex = 0;
+
+  return {
+    ...plan,
+    steps: plan.steps.map((step) => {
+      if (!step.tool_call) return step;
+      const execution = results[resultIndex++];
+      if (!execution) return { ...step, execution_status: 'skipped' };
+      return {
+        ...step,
+        execution_status: execution.status,
+        result: execution.result,
+        error: execution.error,
+      };
+    }),
+  };
 }
 
 export async function generateAiLearningPlan(): Promise<AiLearningPlan> {

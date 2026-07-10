@@ -11,10 +11,12 @@ import * as wrongItem from '../services/wrongItem';
 import * as stats from '../services/stats';
 import * as rogue from '../services/rogue';
 import * as learningAgent from '../services/learningAgent';
+import * as agentTools from '../services/agentTools';
+import * as masterAgent from '../services/masterAgent';
+import * as training from '../services/training';
 import * as ai from '../ai/service';
 import { judgeLocally } from '../services/localJudge';
 import { ALL_PROVIDERS } from '../ai/registry';
-import { selectAll as dbSelectAll } from '../db/helpers';
 
 type Handler = (payload: any) => Promise<unknown> | unknown;
 
@@ -23,8 +25,16 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
     // ===== Dashboard =====
     'dashboard:summary': () => stats.dashboardSummary(),
     'dashboard:recent-runs': (_p: { limit?: number }) => stats.recentRuns(_p?.limit || 10),
+    'training:recommendation': (p) => training.getTrainingRecommendation(p || {}),
     'agent:summary': () => learningAgent.getLearningAgentPlan(),
     'agent:ai-plan': async () => learningAgent.generateAiLearningPlan(),
+    'agent:tools': () => agentTools.getAgentToolMetadata(),
+    'agent:run': async () => masterAgent.runMasterAgent(),
+    'agent:execute-plan': async (p) => learningAgent.executeAiLearningPlan(p.plan),
+    'agent:execute-step': async (p) => {
+      const plan = await learningAgent.executeAiLearningPlan({ ...p.plan, steps: [p.step] });
+      return plan.steps[0];
+    },
 
     // ===== Provider =====
     'provider:list': () => apiProvider.listProviders(),
@@ -91,16 +101,6 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
         error_type: result.error_type,
         feedback: result.feedback,
       });
-      // 触发易错点统计刷新
-      if (q) {
-        const links = dbSelectAll<{ weak_point_id: string }>(
-          `SELECT weak_point_id FROM weak_point_questions WHERE question_id = ?`,
-          [q.id],
-        );
-        for (const l of links) {
-          weakPoint.refreshWeakPointStats(l.weak_point_id);
-        }
-      }
       return result;
     },
     'question:explain': async (p) => ai.explainError(p),

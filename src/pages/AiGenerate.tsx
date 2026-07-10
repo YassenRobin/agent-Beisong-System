@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
 import { releaseArticleHoverLock, toggleAllArticleSelection, toggleArticleSelection } from '../utils/articleSelection';
+import { questionTypeLabel } from '../utils/labels';
 
 const TYPE_OPTIONS = [
   { value: 'choice', label: '选择题' },
@@ -32,7 +33,7 @@ type DraftQuestion = {
 };
 
 function typeLabel(type: string) {
-  return (TYPE_OPTIONS.find((t) => t.value === type) || { label: type }).label;
+  return TYPE_OPTIONS.find((t) => t.value === type)?.label || questionTypeLabel(type);
 }
 
 function normalizeStarRange(stars?: number[]): [number, number] {

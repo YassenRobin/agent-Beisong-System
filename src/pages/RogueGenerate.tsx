@@ -3,6 +3,7 @@ import { Card, Form, Select, InputNumber, Switch, Button, Space, Typography, mes
 import { EyeOutlined, FireOutlined, StarFilled, PlayCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
+import { roomTypeLabel } from '../utils/labels';
 
 const STAR_DESC = {
   1: '入门热身 · 5 心 · 5—8 题 · 70% 1 星题',
@@ -200,12 +201,6 @@ export default function RogueGenerate() {
   );
 }
 
-function roomTypeLabel(t: string) {
-  return ({
-    safe: '安全房', normal: '普通房', danger: '危险房', elite: '精英房',
-    weak_point: '易错点房', rest: '休息房', boss: 'Boss 房',
-  } as any)[t] || t;
-}
 function roomColor(t: string) {
   return ({
     safe: 'green', normal: 'blue', danger: 'orange', elite: 'purple',

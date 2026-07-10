@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card, Typography, Space, Tabs, Table, Tag, message } from 'antd';
 import { invoke } from '../api/ipc';
+import { questionTypeLabel } from '../utils/labels';
 
 export default function Rankings() {
   const [textRanks, setTextRanks] = useState<any[]>([]);
@@ -54,7 +55,7 @@ export default function Rankings() {
                   dataSource={typeRanks}
                   pagination={false}
                   columns={[
-                    { title: '题型', dataIndex: 'type', render: (v) => <Tag>{v}</Tag> },
+                    { title: '题型', dataIndex: 'type', render: (v) => <Tag>{questionTypeLabel(v)}</Tag> },
                     { title: '收藏次数', dataIndex: 'count', render: (v) => <Tag color="purple">{v}</Tag> },
                   ]}
                 />

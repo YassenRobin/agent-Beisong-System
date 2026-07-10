@@ -4,6 +4,7 @@ import { PlayCircleOutlined, StarFilled } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
+import { questionTypeLabel, roomTypeLabel } from '../utils/labels';
 
 type Question = {
   id: string;
@@ -90,7 +91,7 @@ export default function RogueDetail() {
                 <Space direction="vertical" size={12} style={{ width: '100%' }}>
                   {room.question_ids.map((qid, qIndex) => {
                     const q = questions[qid];
-                    if (!q) return <Typography.Text key={qid} type="secondary">题目 {qid} 已不存在</Typography.Text>;
+                    if (!q) return <Typography.Text key={qid} type="secondary">题目已不存在</Typography.Text>;
                     return (
                       <div key={qid} className="textbook-section">
                         <Space wrap style={{ marginBottom: 8 }}>
@@ -123,21 +124,7 @@ export default function RogueDetail() {
 }
 
 function typeLabel(t: string) {
-  return ({
-    choice: '选择题',
-    blank: '挖空题',
-    context_blank: '文脉挖空',
-    context_recitation: '文脉默写',
-    pure_recitation: '纯默写',
-    ordering: '排序题',
-  } as any)[t] || t;
-}
-
-function roomTypeLabel(t: string) {
-  return ({
-    safe: '安全房', normal: '普通房', danger: '危险房', elite: '精英房',
-    weak_point: '易错点房', rest: '休息房', boss: 'Boss 房',
-  } as any)[t] || t;
+  return questionTypeLabel(t);
 }
 
 function roomColor(t: string) {

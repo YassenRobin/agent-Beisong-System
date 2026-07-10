@@ -220,6 +220,8 @@ export function recordAttempt(opts: {
     addWrongItem(opts.question_id, opts.user_answer, q?.answer || '', opts.error_type || 'other');
   }
 
+  refreshLinkedWeakPointStats(opts.question_id);
+
   return id;
 }
 
@@ -236,6 +238,34 @@ function addWrongItem(question_id: string, actual: string, expected: string, err
       `INSERT INTO wrong_items (id, user_id, text_id, question_id, expected, actual, error_type, count, status, last_wrong_at)
        VALUES (?, 'local', ?, ?, ?, ?, ?, 1, 'active', ?)`,
       [uid('wi_'), q?.text_id || '', question_id, expected || q?.answer || '', actual, error_type, nowIso()],
+    );
+  }
+}
+
+function refreshLinkedWeakPointStats(questionId: string) {
+  const weakPointIds = selectAll<{ weak_point_id: string }>(
+    `SELECT weak_point_id FROM weak_point_questions WHERE question_id = ?`,
+    [questionId],
+  );
+
+  for (const { weak_point_id: weakPointId } of weakPointIds) {
+    const row = selectOne<any>(
+      `SELECT
+         (SELECT COUNT(*) FROM weak_point_questions WHERE weak_point_id = ?) AS question_count,
+         (SELECT COUNT(*) FROM attempts a INNER JOIN weak_point_questions wq ON wq.question_id = a.question_id WHERE wq.weak_point_id = ?) AS attempt_count,
+         (SELECT COUNT(*) FROM attempts a INNER JOIN weak_point_questions wq ON wq.question_id = a.question_id WHERE wq.weak_point_id = ? AND a.is_correct = 1) AS correct_count
+      `,
+      [weakPointId, weakPointId, weakPointId],
+    );
+    if (!row) continue;
+    const attempt = row.attempt_count || 0;
+    const correct = row.correct_count || 0;
+    const wrong = Math.max(0, attempt - correct);
+    const accuracy = attempt ? correct / attempt : 0;
+    execute(
+      `UPDATE weak_point_stats SET question_count = ?, attempt_count = ?, correct_count = ?, wrong_count = ?, accuracy = ?, last_attempt_at = ?, updated_at = ?
+       WHERE weak_point_id = ?`,
+      [row.question_count, attempt, correct, wrong, accuracy, nowIso(), nowIso(), weakPointId],
     );
   }
 }

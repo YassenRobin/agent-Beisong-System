@@ -3,6 +3,7 @@ import { Card, Table, Button, Input, Space, Typography, Popconfirm, Tag, message
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, ThunderboltOutlined, ImportOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
+import { articleTypeLabel } from '../utils/labels';
 
 type Article = {
   id: string;
@@ -112,7 +113,7 @@ export default function ArticleList() {
             { title: '标题', dataIndex: 'title', render: (v, r) => <Link to={`/articles/${r.id}`}>{v}</Link> },
             { title: '作者', dataIndex: 'author', width: 120 },
             { title: '朝代', dataIndex: 'dynasty', width: 80 },
-            { title: '类型', dataIndex: 'type', width: 120, render: (v) => v ? <Tag>{v}</Tag> : null },
+            { title: '类型', dataIndex: 'type', width: 120, render: (v) => <Tag>{articleTypeLabel(v)}</Tag> },
             { title: '长度', dataIndex: 'length_type', width: 100, render: (v) => v === 'short' ? '短文' : v === 'long' ? '长文' : '-' },
             { title: '状态', dataIndex: 'enabled', width: 80, render: (v) => v ? <Tag color="green">启用</Tag> : <Tag>停用</Tag> },
             {

@@ -307,6 +307,69 @@ CREATE TABLE IF NOT EXISTS rogue_damage_logs (
   FOREIGN KEY (run_id) REFERENCES rogue_runs(id)
 );
 
+CREATE TABLE IF NOT EXISTS agent_goals (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  success_criteria_json TEXT,
+  context_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id TEXT PRIMARY KEY,
+  goal_id TEXT,
+  parent_run_id TEXT,
+  agent_type TEXT NOT NULL,
+  mode TEXT,
+  status TEXT NOT NULL,
+  title TEXT NOT NULL,
+  summary TEXT,
+  input_snapshot_json TEXT,
+  plan_json TEXT,
+  result_json TEXT,
+  next_route TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  updated_at TEXT NOT NULL,
+  finished_at TEXT,
+  FOREIGN KEY (goal_id) REFERENCES agent_goals(id) ON DELETE SET NULL,
+  FOREIGN KEY (parent_run_id) REFERENCES agent_runs(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_steps (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  step_index INTEGER NOT NULL,
+  tool_name TEXT,
+  risk TEXT,
+  status TEXT NOT NULL,
+  params_json TEXT,
+  result_json TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  started_at TEXT,
+  finished_at TEXT,
+  FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE,
+  UNIQUE (run_id, step_index)
+);
+
+CREATE TABLE IF NOT EXISTS agent_events (
+  id TEXT PRIMARY KEY,
+  run_id TEXT,
+  goal_id TEXT,
+  event_type TEXT NOT NULL,
+  payload_json TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (run_id) REFERENCES agent_runs(id) ON DELETE CASCADE,
+  FOREIGN KEY (goal_id) REFERENCES agent_goals(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_questions_text ON questions(text_id);
 CREATE INDEX IF NOT EXISTS idx_questions_paragraph ON questions(paragraph_id);
 CREATE INDEX IF NOT EXISTS idx_paragraphs_text ON paragraphs(text_id);
@@ -316,4 +379,9 @@ CREATE INDEX IF NOT EXISTS idx_wrong_question ON wrong_items(question_id);
 CREATE INDEX IF NOT EXISTS idx_wp_text ON weak_points(text_id);
 CREATE INDEX IF NOT EXISTS idx_wp_enabled ON weak_points(enabled);
 CREATE INDEX IF NOT EXISTS idx_qff_items_question ON question_favorite_folder_items(question_id);
+CREATE INDEX IF NOT EXISTS idx_agent_goals_status ON agent_goals(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_status ON agent_runs(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_goal ON agent_runs(goal_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_steps_run ON agent_steps(run_id, step_index);
+CREATE INDEX IF NOT EXISTS idx_agent_events_run ON agent_events(run_id, created_at);
 `;

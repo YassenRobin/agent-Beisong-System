@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Card, Table, Button, Space, Typography, Tag, message, Switch, Popconfirm, Modal, InputNumber, Form, Select, Input } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, BarChartOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, RobotOutlined, BarChartOutlined, EyeOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
+import { questionTypeLabel, weakTypeLabel } from '../utils/labels';
 
 type WeakPoint = {
   id: string;
@@ -17,11 +18,23 @@ type WeakPoint = {
   accuracy?: number;
 };
 
+type WeakPointQuestion = {
+  id: string;
+  type: string;
+  star: number;
+  prompt: string;
+  answer: string;
+  enabled: number;
+};
+
 export default function WeakPointList() {
   const [items, setItems] = useState<WeakPoint[]>([]);
   const [texts, setTexts] = useState<any[]>([]);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [genModal, setGenModal] = useState<WeakPoint | null>(null);
+  const [questionModal, setQuestionModal] = useState<WeakPoint | null>(null);
+  const [weakPointQuestions, setWeakPointQuestions] = useState<WeakPointQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [genForm] = Form.useForm();
   const nav = useNavigate();
 
@@ -65,6 +78,19 @@ export default function WeakPointList() {
     });
   };
 
+  const openQuestionModal = async (wp: WeakPoint) => {
+    setQuestionModal(wp);
+    setLoadingQuestions(true);
+    try {
+      const rows = await invoke<WeakPointQuestion[]>('weak-point:questions', { id: wp.id });
+      setWeakPointQuestions(rows);
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
   const onGen = async () => {
     const v = await genForm.validateFields();
     if (!genModal) return;
@@ -102,7 +128,7 @@ export default function WeakPointList() {
           columns={[
             { title: '标题', dataIndex: 'title', render: (v, r) => <Link to={`/weak-points/${r.id}`}>{v}</Link> },
             { title: '文章', dataIndex: 'text_title', width: 140 },
-            { title: '类型', dataIndex: 'weak_type', width: 120, render: (v) => v ? <Tag>{v}</Tag> : null },
+            { title: '类型', dataIndex: 'weak_type', width: 120, render: (v) => v ? <Tag>{weakTypeLabel(v)}</Tag> : null },
             {
               title: '启用', dataIndex: 'enabled', width: 80, render: (v, r: any) => (
                 <Switch size="small" checked={!!v} onChange={(c) => onToggle(r.id, c)} />
@@ -119,6 +145,7 @@ export default function WeakPointList() {
             {
               title: '操作', width: 280, render: (_, r: any) => (
                 <Space>
+                  <Button size="small" icon={<EyeOutlined />} onClick={() => openQuestionModal(r)}>查看题目</Button>
                   <Button size="small" icon={<EditOutlined />} onClick={() => nav(`/weak-points/${r.id}`)}>编辑</Button>
                   <Button size="small" icon={<RobotOutlined />} onClick={() => nav(`/ai-generate?weakPointId=${r.id}`)} loading={generatingId === r.id}>AI 生题</Button>
                   <Button size="small" icon={<BarChartOutlined />} onClick={() => nav(`/rankings?focus=weak-point&id=${r.id}`)}>统计</Button>
@@ -160,6 +187,40 @@ export default function WeakPointList() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Modal
+        title={questionModal ? `「${questionModal.title}」关联题目` : '关联题目'}
+        open={!!questionModal}
+        onCancel={() => {
+          setQuestionModal(null);
+          setWeakPointQuestions([]);
+        }}
+        footer={null}
+        width={920}
+      >
+        <Table
+          rowKey="id"
+          loading={loadingQuestions}
+          dataSource={weakPointQuestions}
+          pagination={{ pageSize: 8 }}
+          columns={[
+            { title: '题型', dataIndex: 'type', width: 120, render: (v) => <Tag color="purple">{typeLabel(v)}</Tag> },
+            { title: '星级', dataIndex: 'star', width: 90, render: (v) => <Tag color="orange">{'★'.repeat(v || 1)}</Tag> },
+            { title: '题干', dataIndex: 'prompt', ellipsis: true },
+            { title: '答案', dataIndex: 'answer', width: 220, ellipsis: true },
+            {
+              title: '状态',
+              dataIndex: 'enabled',
+              width: 90,
+              render: (v) => <Tag color={v ? 'green' : 'default'}>{v ? '启用' : '停用'}</Tag>,
+            },
+          ]}
+        />
+      </Modal>
     </Space>
   );
+}
+
+function typeLabel(type: string) {
+  return questionTypeLabel(type);
 }

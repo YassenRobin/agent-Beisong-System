@@ -4,6 +4,7 @@ import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Ta
 import { DeleteOutlined, EditOutlined, EyeOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
+import { QUESTION_TYPE_LABELS, questionTypeLabel } from '../utils/labels';
 
 type Question = {
   id: string;
@@ -19,15 +20,6 @@ type Question = {
   explanation?: string;
   enabled: number;
   created_at: string;
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  choice: '选择题',
-  blank: '挖空题',
-  context_blank: '文脉挖空',
-  context_recitation: '文脉默写',
-  pure_recitation: '纯默写',
-  ordering: '排序题',
 };
 
 export default function QuestionList() {
@@ -169,7 +161,7 @@ export default function QuestionList() {
             style={{ width: 160 }}
             value={type}
             onChange={setType}
-            options={Object.entries(TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))}
+            options={Object.entries(QUESTION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))}
           />
           <Input.Search
             placeholder="题干/答案关键词"
@@ -197,7 +189,7 @@ export default function QuestionList() {
           pagination={{ pageSize: 20 }}
           columns={[
             { title: '文章', dataIndex: 'text_title', width: 140 },
-            { title: '题型', dataIndex: 'type', width: 100, render: (v) => <Tag color="purple">{TYPE_LABEL[v] || v}</Tag> },
+            { title: '题型', dataIndex: 'type', width: 100, render: (v) => <Tag color="purple">{questionTypeLabel(v)}</Tag> },
             { title: '星级', dataIndex: 'star', width: 70, render: (v) => <Tag color="orange">{'★'.repeat(v)}</Tag> },
             {
               title: '题干',
@@ -271,7 +263,7 @@ export default function QuestionList() {
           <Form.Item label="题干" name="prompt" rules={[{ required: true }]}><Input.TextArea rows={3} /></Form.Item>
           <Space>
             <Form.Item label="题型" name="type">
-              <Select style={{ width: 160 }} options={Object.entries(TYPE_LABEL).map(([v, l]) => ({ value: v, label: l }))} />
+              <Select style={{ width: 160 }} options={Object.entries(QUESTION_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }))} />
             </Form.Item>
             <Form.Item label="星级" name="star">
               <Select style={{ width: 100 }} options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: `${v} 星` }))} />
@@ -302,7 +294,7 @@ export default function QuestionList() {
         {detail && (
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Space wrap>
-              <Tag color="purple">{TYPE_LABEL[detail.type] || detail.type}</Tag>
+              <Tag color="purple">{questionTypeLabel(detail.type)}</Tag>
               <Tag color="orange">{'★'.repeat(detail.star)}</Tag>
               {detail.text_title ? <Tag>{detail.text_title}</Tag> : null}
               <Button size="small" icon={favoriteIds.has(detail.id) ? <StarFilled /> : <StarOutlined />} onClick={() => toggleFavorite(detail)}>
