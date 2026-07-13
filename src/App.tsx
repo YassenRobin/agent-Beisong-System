@@ -32,7 +32,7 @@ const { Sider, Content, Header } = Layout;
 
 const MENU = [
   { key: '/', icon: <HomeOutlined />, label: <Link to="/">仪表盘</Link> },
-  { key: '/agent', icon: <RobotOutlined />, label: <Link to="/agent">学习 Agent</Link> },
+  { key: '/agent', icon: <RobotOutlined />, label: <Link to="/agent">学习智能助手</Link> },
   { key: '/articles', icon: <BookOutlined />, label: <Link to="/articles">文章管理</Link> },
   { key: '/questions', icon: <EditOutlined />, label: <Link to="/questions">题目管理</Link> },
   { key: '/ai-generate', icon: <BulbOutlined />, label: <Link to="/ai-generate">AI 出题</Link> },

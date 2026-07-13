@@ -487,14 +487,14 @@ export function buildLearningAgentPlan(snapshot: LearningAgentSnapshot): Learnin
   const actions: LearningAgentAction[] = [];
   const insights: string[] = [];
   let status: LearningAgentStatus = 'ready';
-  let headline = '学习 Agent 已就绪';
+  let headline = '学习智能助手已就绪';
   let summary = '题库和训练材料已经具备，可以进入一轮综合训练。';
   let primaryAction = action('start_training', '开始普通训练', '用现有题库完成一轮稳定复习。', '/train', 1);
 
   if (snapshot.texts === 0) {
     status = 'setup';
     headline = '先建立文章库';
-    summary = '学习 Agent 需要文章作为诊断和出题的基础。';
+    summary = '学习智能助手需要文章作为诊断和出题的基础。';
     insights.push('当前还没有文章，先导入或新建背诵篇目。');
     primaryAction = action('setup_articles', '添加文章', '录入课内篇目后，Agent 才能安排出题和训练。', '/articles', 1);
   } else if (!snapshot.activeProvider && snapshot.questions < minimumQuestionCount) {

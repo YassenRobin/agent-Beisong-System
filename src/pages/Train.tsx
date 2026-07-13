@@ -191,7 +191,7 @@ export default function Train() {
           const evaluation = await invoke<WeakPointLearningEvaluation>('agent:weak-point-evaluate', { run_id: agentRunId });
           setAgentEvaluation(evaluation);
           if (evaluation.outcome === 'mastered') message.success('专项学习目标已达成');
-          if (evaluation.outcome === 'continue') message.info('本轮未达目标，Agent 已生成下一轮训练');
+          if (evaluation.outcome === 'continue') message.info('本轮未达目标，学习智能助手已生成下一轮训练');
         } catch (e: any) {
           message.error(e?.message || '专项学习评价失败');
         } finally {
@@ -250,7 +250,7 @@ export default function Train() {
               <Alert
                 type={agentEvaluation.outcome === 'mastered' ? 'success' : 'warning'}
                 showIcon
-                message={agentEvaluation.outcome === 'mastered' ? '学习目标已达成' : 'Agent 已完成重规划'}
+                message={agentEvaluation.outcome === 'mastered' ? '学习目标已达成' : '学习智能助手已完成重规划'}
                 description={agentEvaluation.outcome === 'mastered'
                   ? `正确率 ${Math.round(agentEvaluation.accuracy * 100)}%，已达到 ${Math.round(agentEvaluation.target_accuracy * 100)}% 目标。`
                   : `正确率 ${Math.round(agentEvaluation.accuracy * 100)}%，下一轮将继续围绕同一薄弱点训练。`}
@@ -275,9 +275,9 @@ export default function Train() {
                   开始下一轮专项训练
                 </Button>
               ) : agentEvaluation?.outcome === 'mastered' ? (
-                <Button type="primary" onClick={() => navigate('/agent')}>返回学习 Agent</Button>
+                <Button type="primary" onClick={() => navigate('/agent')}>返回学习智能助手</Button>
               ) : !agentRun ? (
-                <Button type="primary" onClick={load}>再来一轮 Agent 推荐训练</Button>
+                <Button type="primary" onClick={load}>再来一轮智能助手推荐训练</Button>
               ) : null}
               <Button onClick={() => setFinished(false)}>回看最后一题</Button>
             </Space>
@@ -303,7 +303,7 @@ export default function Train() {
               </Radio.Group>
               <Button onClick={load}>换一组</Button>
             </>
-          ) : <Tag color="purple">Agent 目标训练</Tag>}
+          ) : <Tag color="purple">智能助手目标训练</Tag>}
         </Space>
       </Space>
 

@@ -96,7 +96,7 @@ export function buildTrainingRecommendation(
 
   return {
     mode: 'agent_recommended',
-    title: 'Agent 推荐训练',
+    title: '智能助手推荐训练',
     description: buildDescription(summary),
     question_ids: selected.map((item) => item.id),
     route: '/train',

@@ -179,7 +179,7 @@ const agentRoleLabel: Record<string, string> = {
 };
 
 const routeLabel: Record<string, string> = {
-  '/agent': '学习 Agent',
+  '/agent': '学习智能助手',
   '/questions': '题目管理',
   '/weak-points': '薄弱点',
   '/wrong': '错题本',
@@ -242,7 +242,7 @@ export default function LearningAgent() {
     try {
       setPlan(await invoke<AgentPlan>('agent:summary'));
     } catch (e: any) {
-      message.error(e?.message || '学习 Agent 加载失败');
+      message.error(e?.message || '学习智能助手加载失败');
     } finally {
       setLoading(false);
     }
@@ -307,7 +307,7 @@ export default function LearningAgent() {
   if (!plan) {
     return (
       <Card className="textbook-card">
-        <Empty description={loading ? '学习 Agent 正在分析' : '暂无学习诊断'} />
+        <Empty description={loading ? '学习智能助手正在分析' : '暂无学习诊断'} />
       </Card>
     );
   }
@@ -316,7 +316,7 @@ export default function LearningAgent() {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Space align="center" wrap>
         <RobotOutlined style={{ color: '#5d3fd3', fontSize: 24 }} />
-        <Typography.Title level={3} style={{ margin: 0 }}>学习 Agent</Typography.Title>
+        <Typography.Title level={3} style={{ margin: 0 }}>学习智能助手</Typography.Title>
         <Tag color={statusColor[plan.status] || 'purple'}>{statusLabel[plan.status] || '学习状态'}</Tag>
         {plan.snapshot.activeProvider ? <Tag color="purple">AI: {plan.snapshot.activeProvider.name}</Tag> : <Tag>未配置 AI</Tag>}
       </Space>
