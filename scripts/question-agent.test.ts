@@ -58,6 +58,7 @@ async function main() {
   assert.equal(aiRun.result.created_count, 3);
 
   const masterRun = await runMasterAgent({
+    persist: false,
     snapshot,
     askAi: async () => JSON.stringify({
       tool_calls: [

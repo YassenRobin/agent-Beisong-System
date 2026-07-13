@@ -15,6 +15,9 @@ import {
 } from './agentRuntime';
 import { getLearningAgentPlan } from './learningAgent';
 import { getWeakPoint } from './weakPoint';
+import type { CoachEvidence } from './coachAgent';
+import { planWeakPointRound } from './coachAgent';
+import { evaluateMasteryEvidence } from './evaluatorAgent';
 
 const TARGET_ACCURACY = 0.8;
 const MINIMUM_ATTEMPTS = 6;
@@ -98,11 +101,15 @@ function readGoalData(goalId: string): { context: WeakPointGoalContext; criteria
 async function createLearningRound(
   goalId: string,
   weakPointId: string,
-  opts: { parent_run_id?: string; handlers?: AgentToolHandlers } = {},
+  opts: { parent_run_id?: string; handlers?: AgentToolHandlers; previous_evaluation?: CoachEvidence } = {},
 ): Promise<WeakPointLearningSession> {
   const weakPoint = getWeakPoint(weakPointId);
   if (!weakPoint) throw new Error('薄弱点不存在。');
   const { criteria } = readGoalData(goalId);
+  const coachPlan = planWeakPointRound({
+    minimum_attempts: criteria.minimum_attempts,
+    previous_evaluation: opts.previous_evaluation,
+  });
   const run = createAgentRun({
     goal_id: goalId,
     parent_run_id: opts.parent_run_id,
@@ -112,22 +119,24 @@ async function createLearningRound(
       weak_point_id: weakPointId,
       target_accuracy: criteria.target_accuracy,
       minimum_attempts: criteria.minimum_attempts,
+      coach_strategy: coachPlan.strategy,
     },
   });
   transitionAgentRun(run.id, 'observing');
   transitionAgentRun(run.id, 'planning');
+  appendAgentEvent({ run_id: run.id, goal_id: goalId, event_type: 'role.coach', payload: coachPlan.trace });
 
   const call: AgentToolCall = {
     tool: 'question.generate_for_weak_point',
     risk: 'write_safe',
     params: {
       weak_point_id: weakPointId,
-      count: criteria.minimum_attempts,
-      question_types: ['blank', 'context_recitation'],
+      count: coachPlan.count,
+      question_types: coachPlan.question_types,
     },
   };
   createAgentSteps(run.id, [call]);
-  transitionAgentRun(run.id, 'executing', { mode: 'deterministic', plan: { tool_calls: [call] } });
+  transitionAgentRun(run.id, 'executing', { mode: 'deterministic', plan: { coach: coachPlan.trace, tool_calls: [call] } });
   const [execution] = await executeAgentToolCalls([call], { handlers: opts.handlers });
   recordAgentStepResult(run.id, 0, execution);
 
@@ -246,9 +255,13 @@ export async function evaluateWeakPointLearningRun(
   const runResult = (run.result || {}) as { question_ids?: string[] };
   const questionIds = Array.isArray(runResult.question_ids) ? runResult.question_ids.map(String) : [];
   const attempts = listRunAttempts(questionIds, run.started_at);
-  const total = attempts.length;
-  const correct = attempts.filter((item) => !!item.is_correct).length;
-  const accuracy = total ? correct / total : 0;
+  const evaluation = evaluateMasteryEvidence({
+    evidence: attempts,
+    target_accuracy: criteria.target_accuracy,
+    minimum_attempts: criteria.minimum_attempts,
+  });
+  const { total, correct, accuracy } = evaluation;
+  appendAgentEvent({ run_id: run.id, goal_id: run.goal_id, event_type: 'role.evaluator', payload: evaluation.trace });
   const base = {
     goal_id: run.goal_id,
     run_id: run.id,
@@ -259,7 +272,7 @@ export async function evaluateWeakPointLearningRun(
     minimum_attempts: criteria.minimum_attempts,
   };
 
-  if (total < criteria.minimum_attempts) {
+  if (evaluation.outcome === 'incomplete') {
     appendAgentEvent({
       run_id: run.id,
       goal_id: run.goal_id,
@@ -272,7 +285,7 @@ export async function evaluateWeakPointLearningRun(
   transitionAgentRun(run.id, 'evaluating', {
     result: { ...runResult, evaluation: { total, correct, accuracy } },
   });
-  if (accuracy >= criteria.target_accuracy) {
+  if (evaluation.outcome === 'mastered') {
     transitionAgentGoal(run.goal_id, 'completed');
     transitionAgentRun(run.id, 'completed', {
       summary: `专项学习目标达成，正确率 ${Math.round(accuracy * 100)}%。`,
@@ -288,6 +301,7 @@ export async function evaluateWeakPointLearningRun(
   const nextRound = await createLearningRound(run.goal_id, context.weak_point_id, {
     parent_run_id: run.id,
     handlers: opts.handlers,
+    previous_evaluation: { total, correct, accuracy },
   });
   transitionAgentRun(run.id, 'completed', {
     summary: `本轮正确率 ${Math.round(accuracy * 100)}%，已生成下一轮专项训练。`,

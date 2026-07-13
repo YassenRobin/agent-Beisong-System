@@ -1,7 +1,5 @@
-import { chat } from '../ai/service';
-import { safeJsonParse } from './json';
-import type { AgentToolCall, AgentToolExecutionResult, AgentToolHandlers, AgentToolName } from './agentTools';
-import { executeAgentToolCalls, normalizeAgentToolCall } from './agentTools';
+import type { AgentToolCall, AgentToolExecutionResult, AgentToolHandlers } from './agentTools';
+import { executeAgentToolCalls } from './agentTools';
 import type { LearningAgentSnapshot } from './learningAgent';
 import { getLearningAgentPlan } from './learningAgent';
 import {
@@ -10,6 +8,8 @@ import {
   recordAgentStepResult,
   transitionAgentRun,
 } from './agentRuntime';
+import type { AgentRole, AgentRoleTrace } from './agentRoles';
+import { runPlannerAgent } from './plannerAgent';
 
 export type MasterAgentStep = AgentToolExecutionResult & {
   risk?: AgentToolCall['risk'];
@@ -21,15 +21,9 @@ export type MasterAgentRun = {
   status: 'completed' | 'partial' | 'failed';
   title: string;
   summary: string;
+  roles: AgentRoleTrace[];
   steps: MasterAgentStep[];
   next_route: string;
-};
-
-type RawToolCall = {
-  tool?: string;
-  name?: string;
-  params?: Record<string, unknown>;
-  arguments?: Record<string, unknown>;
 };
 
 type RunMasterAgentOptions = {
@@ -39,116 +33,31 @@ type RunMasterAgentOptions = {
   persist?: boolean;
 };
 
-function getToolCallArray(raw: unknown): RawToolCall[] {
-  if (!raw || typeof raw !== 'object') return [];
-  const obj = raw as any;
-  const direct = obj.tool_calls || obj.toolCalls || obj.tools || obj.actions;
-  if (Array.isArray(direct)) return direct;
-  if (Array.isArray(obj.steps)) {
-    return obj.steps
-      .map((step: any) => step?.tool_call || step?.toolCall || step?.tool)
-      .filter((step: unknown) => step && typeof step === 'object');
-  }
-  return [];
-}
-
-function normalizeMasterToolCalls(rawCalls: RawToolCall[], snapshot: LearningAgentSnapshot): AgentToolCall[] {
-  const ctx = {
-    articleIds: snapshot.articleIds || [],
-    weakPointIds: snapshot.weakPoints.map((item) => item.id),
-    dungeonIds: snapshot.dungeons.map((item) => item.id),
-  };
-  const calls: AgentToolCall[] = [];
-  const seen = new Set<string>();
-
-  for (const raw of rawCalls) {
-    const call = normalizeAgentToolCall({
-      tool: raw.tool || raw.name,
-      params: raw.params || raw.arguments || {},
-    }, ctx);
-    if (!call) continue;
-    const key = `${call.tool}:${JSON.stringify(call.params)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    calls.push(call);
-    if (calls.length >= 5) break;
-  }
-
-  return calls;
-}
-
-function deterministicToolCalls(snapshot: LearningAgentSnapshot): AgentToolCall[] {
-  const calls: AgentToolCall[] = [];
-  const minimumQuestions = snapshot.texts * 2;
-  const weakFocus = snapshot.weakPoints
-    .slice()
-    .sort((a, b) => (b.wrong_count || 0) - (a.wrong_count || 0))
-    .find((item) => (item.wrong_count || 0) >= 3 || (item.accuracy ?? 1) < 0.65);
-
-  const add = (tool: AgentToolName, params: Record<string, unknown>) => {
-    const call = normalizeAgentToolCall({ tool, params }, {
-      articleIds: snapshot.articleIds || [],
-      weakPointIds: snapshot.weakPoints.map((item) => item.id),
-      dungeonIds: snapshot.dungeons.map((item) => item.id),
-    });
-    if (call) calls.push(call);
-  };
-
-  if (snapshot.activeProvider && snapshot.articleIds?.length && snapshot.questions < minimumQuestions) {
-    add('question.agent_generate', { goal: 'fill_question_bank' });
-  }
-  if (snapshot.activeProvider && weakFocus) {
-    add('question.agent_generate', { goal: 'focus_weak_point' });
-  }
-  if (snapshot.wrongItems.length) {
-    add('wrong.review_queue', {});
-  }
-  if (snapshot.questions >= 1) {
-    add('training.start_recommendation', {});
-  }
-
-  return calls.slice(0, 5);
-}
-
-function buildPrompt(snapshot: LearningAgentSnapshot): string {
-  return `You are the master learning Agent. Return JSON only.
-Schema: { "tool_calls": [{ "tool": string, "params": object }] }
-Allowed tools:
-- question.agent_generate
-- wrong.review_queue
-- rogue.generate_and_save
-- training.start_recommendation
-Prefer question.agent_generate whenever questions need to be created. It will decide article vs weak-point generation internally.
-Forbidden: delete, provider changes, database reset, uploads, local commands.
-Context:
-${JSON.stringify({
-    texts: snapshot.texts,
-    questions: snapshot.questions,
-    article_ids: snapshot.articleIds || [],
-    weak_points: snapshot.weakPoints,
-    wrong_items: snapshot.wrongItems,
-    dungeons: snapshot.dungeons,
-    learner_profile: snapshot.learnerProfile || null,
-  }, null, 2)}`;
-}
-
-async function defaultAskAi(prompt: string): Promise<string> {
-  const res = await chat({
-    model: '',
-    messages: [
-      { role: 'system', content: 'You are a safe master Agent. Return JSON only.' },
-      { role: 'user', content: prompt },
-    ],
-    jsonMode: true,
-    temperature: 0.2,
-    maxTokens: 1800,
-  }, 'default');
-  return res.content;
-}
-
 function pickNextRoute(steps: MasterAgentStep[]): string {
   const firstResult = steps.find((step) => step.result && typeof step.result === 'object')?.result as any;
   return firstResult?.route || '/agent';
+}
+
+function roleForTool(tool: AgentToolCall['tool']): AgentRole {
+  if (tool === 'question.agent_generate' || tool.startsWith('question.generate_')) return 'question';
+  return 'coach';
+}
+
+function executionRoleTraces(calls: AgentToolCall[], steps: MasterAgentStep[]): AgentRoleTrace[] {
+  const traces: AgentRoleTrace[] = [];
+  steps.forEach((step, index) => {
+    const call = calls[index];
+    if (!call) return;
+    traces.push({
+      role: roleForTool(call.tool),
+      status: step.status === 'completed' ? 'completed' : step.status === 'failed' ? 'failed' : 'skipped',
+      summary: step.status === 'completed'
+        ? `${roleForTool(call.tool) === 'question' ? 'Question Agent' : 'Coach Agent'} 已完成 ${call.tool}。`
+        : `${call.tool} 未完成：${step.error || '已跳过'}`,
+      output: step.result,
+    });
+  });
+  return traces;
 }
 
 export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<MasterAgentRun> {
@@ -161,53 +70,47 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
       input_snapshot: snapshot,
     });
   if (persistedRun) transitionAgentRun(persistedRun.id, 'observing');
-  const prompt = buildPrompt(snapshot);
   if (persistedRun) transitionAgentRun(persistedRun.id, 'planning');
-  let mode: MasterAgentRun['mode'] = 'ai';
-  let calls: AgentToolCall[] = [];
 
-  if (snapshot.activeProvider) {
-    try {
-      const content = await (opts.askAi || defaultAskAi)(prompt, snapshot);
-      calls = normalizeMasterToolCalls(getToolCallArray(safeJsonParse<unknown>(content)), snapshot);
-    } catch {
-      calls = [];
-    }
-  }
-
-  if (!calls.length) {
-    mode = 'deterministic';
-    calls = deterministicToolCalls(snapshot);
-  }
-
+  const planner = await runPlannerAgent({ snapshot, askAi: opts.askAi });
+  const calls = planner.tool_calls;
   if (persistedRun) {
     createAgentSteps(persistedRun.id, calls);
-    transitionAgentRun(persistedRun.id, 'executing', { mode, plan: { tool_calls: calls } });
+    transitionAgentRun(persistedRun.id, 'executing', {
+      mode: planner.mode,
+      plan: { planner: planner.trace, tool_calls: calls },
+    });
   }
+
   const executions = await executeAgentToolCalls(calls, { handlers: opts.handlers });
-  if (persistedRun) {
-    executions.forEach((execution, index) => recordAgentStepResult(persistedRun.id, index, execution));
-  }
-  const steps = executions.map((execution, index) => ({
-    ...execution,
-    risk: calls[index]?.risk,
-  }));
+  if (persistedRun) executions.forEach((execution, index) => recordAgentStepResult(persistedRun.id, index, execution));
+  const steps = executions.map((execution, index) => ({ ...execution, risk: calls[index]?.risk }));
   const failed = steps.some((step) => step.status === 'failed');
+  const roles: AgentRoleTrace[] = [
+    planner.trace,
+    ...executionRoleTraces(calls, steps),
+    {
+      role: 'master',
+      status: failed ? 'failed' : 'completed',
+      summary: failed ? 'Master Agent 已停止后续高风险步骤并保留部分结果。' : 'Master Agent 已完成角色调度和结果汇总。',
+    },
+  ];
 
   const result: MasterAgentRun = {
     run_id: persistedRun?.id,
-    mode,
+    mode: planner.mode,
     status: failed ? 'partial' : 'completed',
-    title: mode === 'ai' ? '总 Agent 协作完成' : '总 Agent 已用确定性策略接管',
-    summary: mode === 'ai'
-      ? 'AI 选择了可执行工具，总 Agent 已完成安全调用。'
-      : 'AI 没有给出可执行工具调用，总 Agent 已按当前学习数据自动调用安全工具。',
+    title: planner.mode === 'ai' ? '总 Agent 协作完成' : '总 Agent 已用确定性策略接管',
+    summary: planner.mode === 'ai'
+      ? 'Planner、专业子 Agent 与 Master 已完成一次可追踪协作。'
+      : 'Planner 使用确定性策略，专业子 Agent 与 Master 已完成安全协作。',
+    roles,
     steps,
     next_route: pickNextRoute(steps),
   };
   if (persistedRun) {
     transitionAgentRun(persistedRun.id, 'completed', {
-      mode,
+      mode: planner.mode,
       summary: result.summary,
       result,
       next_route: result.next_route,

@@ -39,6 +39,9 @@ async function main() {
   assert.notEqual(badJsonRun.summary, 'AI 返回计划不可用，已切换为规则建议。');
   assert.ok(deterministicExecuted.includes('question.agent_generate:fill_question_bank'));
   assert.equal(badJsonRun.steps[0].status, 'completed');
+  assert.equal(badJsonRun.roles[0].role, 'planner');
+  assert.ok(badJsonRun.roles.some((role) => role.role === 'question'));
+  assert.equal(badJsonRun.roles.at(-1)?.role, 'master');
 
   const aiExecuted: string[] = [];
   const aiRun = await runMasterAgent({
@@ -63,6 +66,7 @@ async function main() {
   assert.equal(aiRun.mode, 'ai');
   assert.deepEqual(aiExecuted, ['fill_question_bank']);
   assert.equal(aiRun.steps[0].tool, 'question.agent_generate');
+  assert.equal(aiRun.roles[0].role, 'planner');
 
   const dangerousRun = await runMasterAgent({
     persist: false,

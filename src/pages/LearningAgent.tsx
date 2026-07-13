@@ -90,6 +90,11 @@ type MasterAgentRun = {
   title: string;
   summary: string;
   next_route: string;
+  roles: Array<{
+    role: 'master' | 'planner' | 'question' | 'coach' | 'evaluator';
+    status: 'completed' | 'failed' | 'skipped';
+    summary: string;
+  }>;
   steps: Array<{
     tool: string;
     risk?: 'read' | 'write_safe';
@@ -163,6 +168,14 @@ const toolLabel: Record<string, string> = {
   'wrong.review_queue': '读取错题复习队列',
   'favorite.recommend_questions': '推荐重点题目',
   'training.start_recommendation': '推荐普通训练',
+};
+
+const agentRoleLabel: Record<string, string> = {
+  master: 'Master Agent',
+  planner: 'Planner Agent',
+  question: 'Question Agent',
+  coach: 'Coach Agent',
+  evaluator: 'Evaluator Agent',
 };
 
 const routeLabel: Record<string, string> = {
@@ -362,6 +375,24 @@ export default function LearningAgent() {
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
               {agentRun.summary}
             </Typography.Paragraph>
+            <Space wrap>
+              {agentRun.roles?.map((role, index) => (
+                <Tag key={`${role.role}-${index}`} color={role.status === 'completed' ? 'purple' : role.status === 'failed' ? 'red' : 'default'}>
+                  {agentRoleLabel[role.role] || role.role} · {role.status === 'completed' ? '完成' : role.status === 'failed' ? '失败' : '跳过'}
+                </Tag>
+              ))}
+            </Space>
+            {agentRun.roles?.length ? (
+              <List
+                size="small"
+                dataSource={agentRun.roles}
+                renderItem={(role) => (
+                  <List.Item>
+                    <List.Item.Meta title={agentRoleLabel[role.role] || role.role} description={role.summary} />
+                  </List.Item>
+                )}
+              />
+            ) : null}
             <List
               dataSource={agentRun.steps}
               renderItem={(item, index) => (

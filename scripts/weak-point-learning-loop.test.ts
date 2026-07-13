@@ -42,9 +42,11 @@ async function main() {
   activateProvider(provider.id);
 
   let generatedRound = 0;
+  const generatedParams: any[] = [];
   const handlers = {
-    'question.generate_for_weak_point': async () => {
+    'question.generate_for_weak_point': async (params: any) => {
       generatedRound += 1;
+      generatedParams.push(params);
       const questionIds: string[] = [];
       for (let index = 0; index < 6; index += 1) {
         const question = createQuestion({
@@ -101,6 +103,9 @@ async function main() {
   assert.equal(getAgentRunDetail(retry.next_run_id!)?.status, 'awaiting_student');
   assert.equal(getAgentRunDetail(retry.next_run_id!)?.parent_run_id, retrySession.run_id);
   assert.equal(getAgentGoal(retrySession.goal_id)?.status, 'active');
+  assert.deepEqual(generatedParams.at(-1)?.question_types, ['blank']);
+  const retryEvents = getAgentRunDetail(retry.next_run_id!)?.events || [];
+  assert.ok(retryEvents.some((event) => event.event_type === 'role.coach'));
 
   getDb().close();
   fs.rmSync(dbPath, { force: true });
