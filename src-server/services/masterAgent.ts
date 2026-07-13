@@ -66,7 +66,7 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
     ? null
     : createAgentRun({
       agent_type: 'master_learning_agent',
-      title: '总 Agent 学习调度',
+      title: '自动安排本轮学习',
       input_snapshot: snapshot,
     });
   if (persistedRun) transitionAgentRun(persistedRun.id, 'observing');
@@ -100,7 +100,7 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
     run_id: persistedRun?.id,
     mode: planner.mode,
     status: failed ? 'partial' : 'completed',
-    title: planner.mode === 'ai' ? '总 Agent 协作完成' : '总 Agent 已用确定性策略接管',
+    title: planner.mode === 'ai' ? '本轮学习安排完成' : '已按安全规则安排本轮学习',
     summary: planner.mode === 'ai'
       ? 'Planner、专业子 Agent 与 Master 已完成一次可追踪协作。'
       : 'Planner 使用确定性策略，专业子 Agent 与 Master 已完成安全协作。',

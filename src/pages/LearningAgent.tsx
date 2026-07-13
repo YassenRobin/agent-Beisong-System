@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Card, Col, Empty, List, Row, Space, Statistic, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Empty, List, Row, Space, Statistic, Tag, Tooltip, Typography, message } from 'antd';
 import {
   ApiOutlined,
   BookOutlined,
@@ -278,10 +278,10 @@ export default function LearningAgent() {
     try {
       const result = await invoke<MasterAgentRun>('agent:run');
       setAgentRun(result);
-      message.success(result.mode === 'ai' ? '总 Agent 已完成协作' : '总 Agent 已接管执行');
+      message.success(result.mode === 'ai' ? '本轮学习已自动安排完成' : '已按安全规则安排本轮学习');
       await load();
     } catch (e: any) {
-      message.error(e?.message || '总 Agent 运行失败');
+      message.error(e?.message || '自动安排本轮学习失败');
     } finally {
       setRunningAgent(false);
     }
@@ -339,9 +339,11 @@ export default function LearningAgent() {
             <Button icon={<RobotOutlined />} onClick={generateAiPlan} loading={planning}>
               生成 AI 学习计划
             </Button>
-            <Button type="primary" icon={<RobotOutlined />} onClick={runMasterAgent} loading={runningAgent}>
-              运行总 Agent
-            </Button>
+            <Tooltip title="分析题库、错题、薄弱点和学生模型，并立即执行白名单内的安全操作，例如准备专项题和推荐训练队列。">
+              <Button icon={<RobotOutlined />} onClick={runMasterAgent} loading={runningAgent}>
+                {runningAgent ? '正在安排本轮学习' : '自动安排本轮学习'}
+              </Button>
+            </Tooltip>
             {plan.snapshot.weakPoints.length ? (
               <Button
                 icon={<ThunderboltOutlined />}
@@ -352,6 +354,9 @@ export default function LearningAgent() {
               </Button>
             ) : null}
           </Space>
+          <Typography.Text type="secondary">
+            不知道先练什么时使用“自动安排本轮学习”；想先查看方案时使用“生成 AI 学习计划”。
+          </Typography.Text>
         </Space>
       </Card>
 
@@ -360,7 +365,7 @@ export default function LearningAgent() {
           title={
             <Space wrap>
               <RobotOutlined />
-              <span>{agentRun.title}</span>
+              <span>本轮自动安排结果</span>
               <Tag color={agentRun.mode === 'ai' ? 'purple' : 'blue'}>
                 {agentRun.mode === 'ai' ? 'AI 调度' : '确定性接管'}
               </Tag>
@@ -423,7 +428,7 @@ export default function LearningAgent() {
               )}
             />
             <Link to={agentRun.next_route}>
-              <Button icon={<ThunderboltOutlined />}>进入下一步</Button>
+              <Button type="primary" icon={<ThunderboltOutlined />}>开始推荐学习</Button>
             </Link>
           </Space>
         </Card>
