@@ -66,6 +66,7 @@ export default function Train() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const agentRunId = searchParams.get('agent_run_id');
+  const questionId = searchParams.get('question_id');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [idx, setIdx] = useState(0);
   const [input, setInput] = useState('');
@@ -102,6 +103,17 @@ export default function Train() {
           summary: { total: scopedQuestions.length, wrong: 0, weak: scopedQuestions.length, fresh: scopedQuestions.length },
         });
         setQuestions(scopedQuestions);
+      } else if (questionId) {
+        const targetQuestion = all.find((q) => q.id === questionId);
+        if (!targetQuestion) throw new Error('该错题已不存在或已被禁用。');
+        setAgentRun(null);
+        setRecommendation({
+          title: '错题重新训练',
+          description: '重新完成这道错题，答题结果会正常更新掌握度。',
+          question_ids: [targetQuestion.id],
+          summary: { total: 1, wrong: 1, weak: 0, fresh: 0 },
+        });
+        setQuestions([targetQuestion]);
       } else {
         const rec = await invoke<TrainingRecommendation>('training:recommendation', { type: filter, limit: 10 });
         setAgentRun(null);
@@ -124,7 +136,7 @@ export default function Train() {
     } catch (e: any) { message.error(e.message); }
   };
 
-  useEffect(() => { load(); }, [filter, agentRunId]);
+  useEffect(() => { load(); }, [filter, agentRunId, questionId]);
 
   const cur = questions[idx];
 

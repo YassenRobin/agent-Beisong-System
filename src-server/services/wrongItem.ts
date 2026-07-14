@@ -1,7 +1,7 @@
 /**
  * 错题本服务
  */
-import { execute, nowIso, selectAll, selectOne, uid } from '../db/helpers';
+import { execute, selectAll } from '../db/helpers';
 
 export type WrongItem = {
   id: string;
@@ -29,5 +29,5 @@ export function markResolved(id: string) {
 }
 
 export function reAdd(id: string) {
-  execute(`UPDATE wrong_items SET status = 'active', count = count + 1, last_wrong_at = ? WHERE id = ?`, [nowIso(), id]);
+  execute(`UPDATE wrong_items SET status = 'active' WHERE id = ?`, [id]);
 }

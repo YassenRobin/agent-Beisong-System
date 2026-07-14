@@ -194,6 +194,16 @@ function routeDisplay(route?: string) {
   return routeLabel[route] || '推荐页面';
 }
 
+function routeActionLabel(route?: string) {
+  if (!route) return '查看下一步';
+  if (route === '/questions') return '查看生成题目';
+  if (route === '/wrong') return '复习错题';
+  if (route === '/train' || route.startsWith('/train?')) return '开始推荐训练';
+  if (route === '/weak-points') return '查看薄弱点';
+  if (route.startsWith('/rogue/')) return '进入推荐副本';
+  return `前往${routeDisplay(route)}`;
+}
+
 function errorDisplay(error?: string) {
   if (!error) return '';
   if (error === 'Tool handler is not available.') return '该 Agent 工具暂不可用';
@@ -428,7 +438,7 @@ export default function LearningAgent() {
               )}
             />
             <Link to={agentRun.next_route}>
-              <Button type="primary" icon={<ThunderboltOutlined />}>开始推荐学习</Button>
+              <Button type="primary" icon={<ThunderboltOutlined />}>{routeActionLabel(agentRun.next_route)}</Button>
             </Link>
           </Space>
         </Card>

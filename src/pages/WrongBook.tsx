@@ -3,8 +3,10 @@ import { Card, Typography, Space, Tag, Empty, Button, message, Table } from 'ant
 import { CheckOutlined, PlusOutlined } from '@ant-design/icons';
 import { invoke } from '../api/ipc';
 import { errorTypeLabel } from '../utils/labels';
+import { useNavigate } from 'react-router-dom';
 
 export default function WrongBook() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<any[]>([]);
   const [texts, setTexts] = useState<any[]>([]);
 
@@ -26,9 +28,9 @@ export default function WrongBook() {
     load();
   };
 
-  const onReAdd = async (id: string) => {
+  const onReAdd = async (id: string, questionId: string) => {
     await invoke('wrong:re-add', { id });
-    load();
+    navigate(`/train?question_id=${encodeURIComponent(questionId)}`);
   };
 
   return (
@@ -54,7 +56,7 @@ export default function WrongBook() {
                 title: '操作', width: 220, render: (_, r) => (
                   <Space>
                     <Button size="small" icon={<CheckOutlined />} onClick={() => onResolve(r.id)}>标记掌握</Button>
-                    <Button size="small" icon={<PlusOutlined />} onClick={() => onReAdd(r.id)}>加回训练</Button>
+                    <Button size="small" icon={<PlusOutlined />} onClick={() => onReAdd(r.id, r.question_id)}>重新训练</Button>
                   </Space>
                 ),
               },
