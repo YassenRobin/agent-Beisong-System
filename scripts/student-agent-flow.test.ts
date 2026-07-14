@@ -152,13 +152,14 @@ async function main() {
     } as any,
   });
 
-  assert.equal(generatedFromMaster.mode, 'ai');
+  assert.equal(generatedFromMaster.mode, 'deterministic');
   assert.equal(generatedFromMaster.status, 'completed');
   assert.deepEqual(
     generatedFromMaster.steps.map((step) => step.tool),
-    ['question.agent_generate', 'wrong.review_queue', 'training.start_recommendation'],
+    ['wrong.review_queue', 'training.start_recommendation'],
   );
-  assert.equal((generatedFromMaster.steps[0].result as any).created_count, 4);
+  assert.equal((generatedFromMaster.steps[0].result as any).items.length, 1);
+  assert.ok(!generatedFromMaster.steps.some((step) => step.tool === 'question.agent_generate'));
 
   const aiPlan = normalizeAiLearningPlan({
     title: '学生错题后的学习计划',

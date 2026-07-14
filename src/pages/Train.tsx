@@ -98,7 +98,7 @@ export default function Train() {
         setAgentRun(detail);
         setRecommendation({
           title: detail.goal?.title || detail.title,
-          description: detail.summary || '完成本轮专项题后，Agent 会自动评价并决定是否继续。',
+          description: detail.summary || '完成本轮专项题后，学习智能助手会自动评价并决定是否继续。',
           question_ids: questionIds,
           summary: { total: scopedQuestions.length, wrong: 0, weak: scopedQuestions.length, fresh: scopedQuestions.length },
         });
@@ -387,7 +387,7 @@ export default function Train() {
             <Button type="primary" loading={busy} onClick={onSubmit}>提交</Button>
           ) : (
             <Button type="primary" loading={evaluatingAgent} onClick={next}>
-              {idx + 1 >= questions.length && agentRun ? '完成并由 Agent 评价' : '下一题'}
+              {idx + 1 >= questions.length && agentRun ? '完成并由学习智能助手评价' : '下一题'}
             </Button>
           )}
         </Space>

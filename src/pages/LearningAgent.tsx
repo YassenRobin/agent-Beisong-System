@@ -9,7 +9,7 @@ import {
   SnippetsOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { questionTypeListLabel } from '../utils/labels';
 
@@ -238,6 +238,7 @@ function summarizeToolResult(result: any): string {
 
 export default function LearningAgent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [plan, setPlan] = useState<AgentPlan | null>(null);
   const [aiPlan, setAiPlan] = useState<AiLearningPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -312,8 +313,8 @@ export default function LearningAgent() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (location.pathname === '/agent') load();
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!runningAgent) {
