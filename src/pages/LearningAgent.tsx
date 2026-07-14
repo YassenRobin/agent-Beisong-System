@@ -244,6 +244,7 @@ export default function LearningAgent() {
   const [planning, setPlanning] = useState(false);
   const [executing, setExecuting] = useState(false);
   const [runningAgent, setRunningAgent] = useState(false);
+  const [runningAgentSeconds, setRunningAgentSeconds] = useState(0);
   const [agentRun, setAgentRun] = useState<MasterAgentRun | null>(null);
   const [startingWeakPointLoop, setStartingWeakPointLoop] = useState(false);
 
@@ -314,6 +315,18 @@ export default function LearningAgent() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!runningAgent) {
+      setRunningAgentSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setRunningAgentSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [runningAgent]);
+
   if (!plan) {
     return (
       <Card className="textbook-card">
@@ -351,7 +364,7 @@ export default function LearningAgent() {
             </Button>
             <Tooltip title="分析题库、错题、薄弱点和学生模型，并立即执行白名单内的安全操作，例如准备专项题和推荐训练队列。">
               <Button icon={<RobotOutlined />} onClick={runMasterAgent} loading={runningAgent}>
-                {runningAgent ? '正在安排本轮学习' : '自动安排本轮学习'}
+                {runningAgent ? `正在安排（${runningAgentSeconds} 秒）` : '自动安排本轮学习'}
               </Button>
             </Tooltip>
             {plan.snapshot.weakPoints.length ? (
@@ -367,6 +380,14 @@ export default function LearningAgent() {
           <Typography.Text type="secondary">
             不知道先练什么时使用“自动安排本轮学习”；想先查看方案时使用“生成 AI 学习计划”。
           </Typography.Text>
+          {runningAgent ? (
+            <Alert
+              type="info"
+              showIcon
+              message={runningAgentSeconds < 5 ? '正在读取学习记录' : runningAgentSeconds < 20 ? 'Planner 正在选择本轮动作' : 'AI 正在准备学习资源'}
+              description="可以切换到其他页面，完成后结果会保留在学习智能助手中。"
+            />
+          ) : null}
         </Space>
       </Card>
 

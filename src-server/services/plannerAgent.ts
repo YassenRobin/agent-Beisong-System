@@ -73,11 +73,15 @@ export function buildDeterministicPlannerCalls(snapshot: LearningAgentSnapshot):
     const call = normalizeAgentToolCall({ tool, params }, buildContext(snapshot));
     if (call) calls.push(call);
   };
+  if (snapshot.wrongItems.length) {
+    add('wrong.review_queue', {});
+    if (snapshot.questions >= 1) add('training.start_recommendation', {});
+    return calls;
+  }
   if (snapshot.activeProvider && snapshot.articleIds?.length && snapshot.questions < minimumQuestions) {
     add('question.agent_generate', { goal: 'fill_question_bank' });
   }
   if (snapshot.activeProvider && weakFocus) add('question.agent_generate', { goal: 'focus_weak_point' });
-  if (snapshot.wrongItems.length) add('wrong.review_queue', {});
   if (snapshot.questions >= 1) add('training.start_recommendation', {});
   return calls.slice(0, 5);
 }
@@ -91,6 +95,7 @@ Allowed tools:
 - rogue.generate_and_save
 - training.start_recommendation
 Prefer question.agent_generate whenever questions need to be created. The Question Agent chooses its generation strategy.
+If active wrong_items exist, review them before creating any new questions.
 Forbidden: delete, provider changes, database reset, uploads, local commands.
 Context:
 ${JSON.stringify({
@@ -121,7 +126,10 @@ async function defaultAskAi(prompt: string): Promise<string> {
 export async function runPlannerAgent(opts: RunPlannerAgentOptions): Promise<PlannerAgentRun> {
   let mode: PlannerAgentRun['mode'] = 'ai';
   let calls: AgentToolCall[] = [];
-  if (opts.snapshot.activeProvider) {
+  if (opts.snapshot.wrongItems.length) {
+    mode = 'deterministic';
+    calls = buildDeterministicPlannerCalls(opts.snapshot);
+  } else if (opts.snapshot.activeProvider) {
     try {
       const content = await (opts.askAi || defaultAskAi)(buildPlannerPrompt(opts.snapshot), opts.snapshot);
       calls = normalizePlannerToolCalls(getToolCallArray(safeJsonParse<unknown>(content)), opts.snapshot);

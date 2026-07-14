@@ -24,29 +24,32 @@ async function main() {
     snapshot,
     askAi: async () => 'not json at all',
     handlers: {
-      'question.agent_generate': async (params: any) => {
-        deterministicExecuted.push(`question.agent_generate:${params.goal}`);
-        return { created_count: 2, generated_by: 'question_agent', route: '/questions' };
-      },
       'wrong.review_queue': async () => {
         deterministicExecuted.push('wrong.review_queue');
         return { items: [{ id: 'wi_1' }], route: '/wrong' };
+      },
+      'training.start_recommendation': async () => {
+        deterministicExecuted.push('training.start_recommendation');
+        return { question_ids: ['q_1'], route: '/train' };
       },
     } as any,
   });
 
   assert.equal(badJsonRun.mode, 'deterministic');
   assert.notEqual(badJsonRun.summary, 'AI 返回计划不可用，已切换为规则建议。');
-  assert.ok(deterministicExecuted.includes('question.agent_generate:fill_question_bank'));
+  assert.deepEqual(deterministicExecuted, ['wrong.review_queue', 'training.start_recommendation']);
+  assert.ok(!badJsonRun.steps.some((step) => step.tool === 'question.agent_generate'));
+  assert.equal(badJsonRun.next_route, '/wrong');
   assert.equal(badJsonRun.steps[0].status, 'completed');
   assert.equal(badJsonRun.roles[0].role, 'planner');
-  assert.ok(badJsonRun.roles.some((role) => role.role === 'question'));
+  assert.ok(badJsonRun.roles.some((role) => role.role === 'coach'));
   assert.equal(badJsonRun.roles.at(-1)?.role, 'master');
 
+  const noWrongSnapshot = { ...snapshot, wrongItems: [] };
   const aiExecuted: string[] = [];
   const aiRun = await runMasterAgent({
     persist: false,
-    snapshot,
+    snapshot: noWrongSnapshot,
     askAi: async () => JSON.stringify({
       tool_calls: [
         {
@@ -70,7 +73,7 @@ async function main() {
 
   const dangerousRun = await runMasterAgent({
     persist: false,
-    snapshot,
+    snapshot: noWrongSnapshot,
     askAi: async () => JSON.stringify({ tool_calls: [{ tool: 'question.delete', params: { id: 'q_1' } }] }),
     handlers: {
       'question.agent_generate': async () => ({ created_count: 1, generated_by: 'question_agent', route: '/questions' }),
