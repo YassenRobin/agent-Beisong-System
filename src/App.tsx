@@ -8,6 +8,7 @@ import {
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { invoke } from './api/ipc';
 import { KEEP_ALIVE_PATHS, getKeepAlivePath, type KeepAlivePath } from './utils/keepAliveRoutes';
+import OpeningCurtain from './components/OpeningCurtain';
 
 import Dashboard from './pages/Dashboard';
 import LearningAgent from './pages/LearningAgent';
@@ -65,6 +66,7 @@ const KEEP_ALIVE_COMPONENTS: Record<KeepAlivePath, JSX.Element> = {
 export default function App() {
   const location = useLocation();
   const [activeProvider, setActiveProvider] = useState<any>(null);
+  const [showOpeningCurtain, setShowOpeningCurtain] = useState(true);
 
   const refreshActiveProvider = () => {
     invoke('dashboard:summary').then((s: any) => setActiveProvider(s.activeProvider)).catch(() => {});
@@ -92,7 +94,8 @@ export default function App() {
   }, [activeKeepAlivePath]);
 
   return (
-    <Layout className="app-shell">
+    <>
+      <Layout className="app-shell">
       <Sider width={220} theme="light" className="app-sidebar" style={{ borderRight: '1px solid #ece9f6' }}>
         <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid #ece9f6' }}>
           <Typography.Title level={4} style={{ margin: 0, color: '#5d3fd3' }} className="serif">
@@ -148,6 +151,10 @@ export default function App() {
           ) : null}
         </Content>
       </Layout>
-    </Layout>
+      </Layout>
+      {showOpeningCurtain ? (
+        <OpeningCurtain onComplete={() => setShowOpeningCurtain(false)} />
+      ) : null}
+    </>
   );
 }

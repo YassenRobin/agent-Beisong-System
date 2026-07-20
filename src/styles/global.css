@@ -339,3 +339,357 @@ a {
     transform: translateY(0);
   }
 }
+
+/* 启动开幕：檐下字雨 */
+.opening-curtain {
+  --opening-ink: #211710;
+  --opening-paper: rgba(235, 224, 198, 0.94);
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  min-width: 320px;
+  overflow: hidden;
+  color: var(--opening-ink);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 250, 229, 0.95) 0 10%, transparent 48%),
+    linear-gradient(116deg, rgba(95, 62, 34, 0.045), transparent 24%, rgba(255, 255, 255, 0.16) 52%, transparent 76%),
+    var(--opening-paper);
+  border: clamp(6px, 0.8vw, 12px) solid rgba(178, 163, 132, 0.7);
+  border-radius: clamp(18px, 2.4vw, 34px);
+  box-shadow:
+    inset 0 0 90px rgba(64, 43, 23, 0.18),
+    0 24px 70px rgba(32, 22, 13, 0.32);
+  backdrop-filter: blur(16px) saturate(0.72);
+  isolation: isolate;
+  opacity: 1;
+  transition: opacity 0.88s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.88s ease;
+}
+
+.opening-curtain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0.36;
+  mix-blend-mode: multiply;
+  background-image:
+    repeating-radial-gradient(circle at 20% 30%, rgba(74, 53, 29, 0.1) 0 0.45px, transparent 0.9px 3px),
+    repeating-linear-gradient(91deg, transparent 0 6px, rgba(76, 52, 25, 0.022) 7px 8px);
+  background-size: 7px 7px, 14px 100%;
+}
+
+.opening-curtain--leaving {
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(0) saturate(1);
+}
+
+.opening-curtain__canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.62s ease 0.08s, transform 0.82s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.opening-curtain--leaving .opening-curtain__canvas {
+  opacity: 0;
+  transform: translateY(34px);
+}
+
+.opening-curtain__roof {
+  position: absolute;
+  z-index: 4;
+  top: max(56px, 5.5vh);
+  left: 50%;
+  width: min(72vw, 1040px);
+  aspect-ratio: 3 / 1;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transform-origin: center top;
+  transition: opacity 0.58s ease 0.05s, transform 0.78s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.opening-curtain__roof::before {
+  content: '';
+  position: absolute;
+  z-index: -2;
+  left: 7%;
+  top: 81%;
+  width: 90%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(43, 27, 12, 0.54), rgba(43, 27, 12, 0.25) 53%, transparent 78%);
+  filter: blur(clamp(9px, 1.2vw, 17px));
+}
+
+.opening-curtain__roof::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 30%;
+  top: 73%;
+  width: 86%;
+  height: 96%;
+  opacity: 0.92;
+  background: linear-gradient(118deg, rgba(48, 29, 12, 0.48), rgba(48, 29, 12, 0.23) 44%, transparent 80%);
+  filter: blur(clamp(18px, 2.4vw, 34px));
+  transform: rotate(25deg) skewX(-17deg);
+  transform-origin: left top;
+}
+
+.opening-curtain__roof img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter:
+    drop-shadow(9px 14px 8px rgba(42, 24, 8, 0.5))
+    drop-shadow(34px 38px 25px rgba(43, 29, 14, 0.32));
+}
+
+.opening-curtain--leaving .opening-curtain__roof {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-38px) scale(0.98);
+}
+
+.opening-curtain__masthead {
+  position: absolute;
+  z-index: 5;
+  top: clamp(24px, 3.8vw, 48px);
+  left: clamp(24px, 4vw, 58px);
+  right: clamp(24px, 4vw, 58px);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.62s ease;
+}
+
+.opening-curtain__brand {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.opening-curtain__brand span {
+  margin-left: 14px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  opacity: 0.55;
+}
+
+.opening-curtain__edition {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  opacity: 0.55;
+}
+
+.opening-curtain__copy {
+  position: absolute;
+  z-index: 5;
+  left: clamp(30px, 5.8vw, 86px);
+  bottom: clamp(38px, 7.5vh, 86px);
+  width: min(310px, 27vw);
+  pointer-events: none;
+  transition: opacity 0.48s ease, transform 0.66s ease;
+}
+
+.opening-curtain__copy > span {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  opacity: 0.62;
+}
+
+.opening-curtain__copy h1 {
+  margin: 0;
+  font-family: "Noto Serif SC", "Songti SC", STSong, serif;
+  font-size: clamp(27px, 3.6vw, 54px);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
+}
+
+.opening-curtain__hint {
+  position: absolute;
+  z-index: 5;
+  top: 47%;
+  right: clamp(30px, 5vw, 72px);
+  display: flex;
+  gap: 13px;
+  align-items: center;
+  font-size: 10px;
+  line-height: 1.75;
+  letter-spacing: 0.08em;
+  opacity: 0.68;
+  pointer-events: none;
+  transition: opacity 0.75s ease, transform 0.62s ease;
+}
+
+.opening-curtain__hint--quiet {
+  opacity: 0.2;
+}
+
+.opening-curtain__hint i {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(35, 24, 16, 0.42);
+  border-radius: 50%;
+}
+
+.opening-curtain__hint i::after {
+  content: '';
+  position: absolute;
+  top: 17px;
+  left: 17px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #7d2b20;
+  box-shadow: 0 0 0 7px rgba(125, 43, 32, 0.1);
+  animation: openingPointerDrift 2.2s ease-in-out infinite;
+}
+
+.opening-curtain__entry {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: clamp(24px, 4.5vh, 48px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  transform: translateX(-50%);
+  transition: opacity 0.4s ease, transform 0.58s ease;
+}
+
+.opening-curtain__entry button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+  min-width: 184px;
+  height: 48px;
+  padding: 0 22px;
+  color: #f8f0dd;
+  background: #3a271c;
+  border: 1px solid rgba(255, 246, 224, 0.24);
+  border-radius: 2px;
+  box-shadow: 0 10px 24px rgba(48, 29, 15, 0.28);
+  font-family: "Noto Serif SC", "Songti SC", STSong, serif;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  transition: background 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.opening-curtain__entry button:hover {
+  background: #6d2b20;
+  box-shadow: 0 13px 30px rgba(48, 29, 15, 0.34);
+  transform: translateY(-2px);
+}
+
+.opening-curtain__entry button:focus-visible {
+  outline: 2px solid #7d2b20;
+  outline-offset: 4px;
+}
+
+.opening-curtain__entry button i {
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.opening-curtain__entry small {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  opacity: 0.5;
+}
+
+.opening-curtain--leaving .opening-curtain__masthead,
+.opening-curtain--leaving .opening-curtain__copy,
+.opening-curtain--leaving .opening-curtain__hint {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.opening-curtain--leaving .opening-curtain__entry {
+  opacity: 0;
+  transform: translateX(-50%) translateY(18px);
+}
+
+@keyframes openingPointerDrift {
+  0%, 100% { transform: translateX(-7px); }
+  50% { transform: translateX(7px); }
+}
+
+@media (max-width: 760px) {
+  .opening-curtain {
+    border-width: 5px;
+    border-radius: 18px;
+  }
+
+  .opening-curtain__roof {
+    width: 90vw;
+  }
+
+  .opening-curtain__brand span,
+  .opening-curtain__edition,
+  .opening-curtain__hint span,
+  .opening-curtain__entry small {
+    display: none;
+  }
+
+  .opening-curtain__masthead {
+    top: 22px;
+    left: 22px;
+    right: 22px;
+  }
+
+  .opening-curtain__copy {
+    left: 22px;
+    bottom: 30px;
+    width: 48vw;
+  }
+
+  .opening-curtain__copy h1 {
+    font-size: clamp(22px, 6.8vw, 36px);
+  }
+
+  .opening-curtain__hint {
+    top: auto;
+    right: 20px;
+    bottom: 36px;
+  }
+
+  .opening-curtain__entry {
+    bottom: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opening-curtain,
+  .opening-curtain__canvas,
+  .opening-curtain__roof,
+  .opening-curtain__masthead,
+  .opening-curtain__copy,
+  .opening-curtain__hint,
+  .opening-curtain__entry {
+    transition-duration: 0.01ms !important;
+  }
+
+  .opening-curtain__hint i::after {
+    animation: none;
+  }
+}
