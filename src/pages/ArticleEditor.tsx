@@ -3,6 +3,7 @@ import { Card, Form, Input, Select, Button, Space, Typography, message, Tabs, Ta
 import { useNavigate, useParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { ThunderboltOutlined, SaveOutlined, RobotOutlined } from '@ant-design/icons';
+import { safeUiLabel } from '../utils/labels';
 
 const { TextArea } = Input;
 
@@ -205,7 +206,7 @@ export default function ArticleEditor() {
                       <div key={idx} className="textbook-section">
                         <Space style={{ marginBottom: 6 }}>
                           <Tag color="purple">第 {idx + 1} 段</Tag>
-                          {p.logic_role ? <Tag color="cyan">{p.logic_role}</Tag> : null}
+                          {p.logic_role ? <Tag color="cyan">{safeUiLabel(p.logic_role, '内容作用')}</Tag> : null}
                           {p.summary ? <Typography.Text type="secondary">{p.summary}</Typography.Text> : null}
                           <Typography.Text type="secondary">{p.sentences?.length || 0} 句</Typography.Text>
                         </Space>

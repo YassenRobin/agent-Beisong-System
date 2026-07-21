@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
 import { releaseArticleHoverLock, toggleAllArticleSelection, toggleArticleSelection } from '../utils/articleSelection';
-import { questionTypeLabel } from '../utils/labels';
+import { questionTypeLabel, safeUiLabel } from '../utils/labels';
 
 const TYPE_OPTIONS = [
   { value: 'choice', label: '选择题' },
@@ -363,7 +363,7 @@ export default function AiGenerate() {
                     <Space wrap>
                       <Tag color="purple">{typeLabel(q.type)}</Tag>
                       <Tag color="orange">{'★'.repeat(q.star)}</Tag>
-                      {q.logic_role ? <Tag color="cyan">{q.logic_role}</Tag> : null}
+                      {q.logic_role ? <Tag color="cyan">{safeUiLabel(q.logic_role, '内容作用')}</Tag> : null}
                     </Space>
                     <Button
                       size="small"
@@ -399,14 +399,14 @@ export default function AiGenerate() {
         footer={<Button type="primary" onClick={() => setActive(null)}>知道了</Button>}
         width={720}
         getContainer={false}
-        styles={{ mask: { backdropFilter: 'blur(8px)', background: 'rgba(245, 245, 247, 0.58)' } }}
+        styles={{ mask: { backdropFilter: 'blur(8px)', background: 'rgba(58, 39, 28, 0.32)' } }}
       >
         {active ? (
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Space wrap>
               <Tag color="purple">{typeLabel(active.type)}</Tag>
               <Tag color="orange">{'★'.repeat(active.star)}</Tag>
-              {active.logic_role ? <Tag color="cyan">{active.logic_role}</Tag> : null}
+              {active.logic_role ? <Tag color="cyan">{safeUiLabel(active.logic_role, '内容作用')}</Tag> : null}
             </Space>
             <div className="question-prompt"><MarkedText text={active.prompt} /></div>
             {active.options?.length ? (

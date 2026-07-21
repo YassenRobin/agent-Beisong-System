@@ -81,8 +81,8 @@ export default function WeakPointEditor() {
                 options={texts.map((t) => ({ value: t.id, label: t.title }))}
               />
             </Form.Item>
-            <Form.Item label="段落 ID (可选)" name="paragraph_id" style={{ width: 200 }}>
-              <Input placeholder="段落 id" />
+            <Form.Item name="paragraph_id" hidden>
+              <Input />
             </Form.Item>
             <Form.Item label="易错类型" name="weak_type" style={{ width: 200 }}>
               <Select allowClear options={WEAK_TYPES} />

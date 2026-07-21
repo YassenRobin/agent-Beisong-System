@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
-import { questionTypeListLabel } from '../utils/labels';
+import { questionTypeLabel, questionTypeListLabel, safeUiLabel, safeUiText } from '../utils/labels';
 
 type AgentAction = {
   type: string;
@@ -161,21 +161,21 @@ const riskLabel: Record<string, string> = {
 const toolLabel: Record<string, string> = {
   'snapshot.learning_context': '读取学习概况',
   'article.list_enabled': '读取可用文章',
-  'question.agent_generate': 'AI 出题子 Agent',
+  'question.agent_generate': '智能出题',
   'question.generate_for_articles': '按文章生成题目',
   'question.generate_for_weak_point': '薄弱点专项出题',
-  'rogue.generate_and_save': '生成 Rogue 副本',
+  'rogue.generate_and_save': '生成闯关副本',
   'wrong.review_queue': '读取错题复习队列',
   'favorite.recommend_questions': '推荐重点题目',
   'training.start_recommendation': '推荐普通训练',
 };
 
 const agentRoleLabel: Record<string, string> = {
-  master: 'Master Agent',
-  planner: 'Planner Agent',
-  question: 'Question Agent',
-  coach: 'Coach Agent',
-  evaluator: 'Evaluator Agent',
+  master: '学习统筹',
+  planner: '学习规划',
+  question: '出题助手',
+  coach: '训练辅导',
+  evaluator: '学习评估',
 };
 
 const routeLabel: Record<string, string> = {
@@ -185,12 +185,12 @@ const routeLabel: Record<string, string> = {
   '/wrong': '错题本',
   '/train': '普通训练',
   '/favorites': '收藏夹',
-  '/rogue': 'Rogue 副本',
+  '/rogue': '闯关副本',
 };
 
 function routeDisplay(route?: string) {
   if (!route) return '推荐页面';
-  if (route.startsWith('/rogue/')) return 'Rogue 副本';
+  if (route.startsWith('/rogue/')) return '闯关副本';
   return routeLabel[route] || '推荐页面';
 }
 
@@ -206,7 +206,7 @@ function routeActionLabel(route?: string) {
 
 function errorDisplay(error?: string) {
   if (!error) return '';
-  if (error === 'Tool handler is not available.') return '该 Agent 工具暂不可用';
+  if (error === 'Tool handler is not available.') return '该学习功能暂不可用';
   if (/Weak point does not exist/i.test(error)) return '薄弱点不存在';
   if (/article does not exist/i.test(error)) return '文章不存在';
   return error
@@ -276,10 +276,10 @@ export default function LearningAgent() {
     setExecuting(true);
     try {
       setAiPlan(await invoke<AiLearningPlan>('agent:execute-plan', { plan: aiPlan }));
-      message.success('Agent 安全计划执行完成');
+      message.success('学习计划执行完成');
       await load();
     } catch (e: any) {
-      message.error(e?.message || 'Agent 安全计划执行失败');
+      message.error(safeUiText(e?.message, '学习计划执行失败'));
     } finally {
       setExecuting(false);
     }
@@ -339,7 +339,7 @@ export default function LearningAgent() {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Space align="center" wrap>
-        <RobotOutlined style={{ color: '#5d3fd3', fontSize: 24 }} />
+        <RobotOutlined style={{ color: 'var(--ui-cinnabar)', fontSize: 24 }} />
         <Typography.Title level={3} style={{ margin: 0 }}>学习智能助手</Typography.Title>
         <Tag color={statusColor[plan.status] || 'purple'}>{statusLabel[plan.status] || '学习状态'}</Tag>
         {plan.snapshot.activeProvider ? <Tag color="purple">AI: {plan.snapshot.activeProvider.name}</Tag> : <Tag>未配置 AI</Tag>}
@@ -350,8 +350,8 @@ export default function LearningAgent() {
           <Alert
             type={plan.status === 'ready' ? 'success' : 'info'}
             showIcon
-            message={plan.headline}
-            description={plan.summary}
+            message={safeUiText(plan.headline, '学习建议')}
+            description={safeUiText(plan.summary, '根据当前学习记录生成建议。')}
           />
           <Space wrap>
             <Link to={plan.primaryAction.route}>
@@ -385,7 +385,7 @@ export default function LearningAgent() {
             <Alert
               type="info"
               showIcon
-              message={runningAgentSeconds < 5 ? '正在读取学习记录' : runningAgentSeconds < 20 ? 'Planner 正在选择本轮动作' : 'AI 正在准备学习资源'}
+              message={runningAgentSeconds < 5 ? '正在读取学习记录' : runningAgentSeconds < 20 ? '正在规划本轮学习内容' : '正在准备学习资源'}
               description="可以切换到其他页面，完成后结果会保留在学习智能助手中。"
             />
           ) : null}
@@ -410,12 +410,12 @@ export default function LearningAgent() {
         >
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              {agentRun.summary}
+              {safeUiText(agentRun.summary, '本轮学习安排已完成。')}
             </Typography.Paragraph>
             <Space wrap>
               {agentRun.roles?.map((role, index) => (
                 <Tag key={`${role.role}-${index}`} color={role.status === 'completed' ? 'purple' : role.status === 'failed' ? 'red' : 'default'}>
-                  {agentRoleLabel[role.role] || role.role} · {role.status === 'completed' ? '完成' : role.status === 'failed' ? '失败' : '跳过'}
+                  {agentRoleLabel[role.role] || '学习协作'} · {role.status === 'completed' ? '完成' : role.status === 'failed' ? '失败' : '跳过'}
                 </Tag>
               ))}
             </Space>
@@ -425,7 +425,7 @@ export default function LearningAgent() {
                 dataSource={agentRun.roles}
                 renderItem={(role) => (
                   <List.Item>
-                    <List.Item.Meta title={agentRoleLabel[role.role] || role.role} description={role.summary} />
+                    <List.Item.Meta title={agentRoleLabel[role.role] || '学习协作'} description={safeUiText(role.summary)} />
                   </List.Item>
                 )}
               />
@@ -438,7 +438,7 @@ export default function LearningAgent() {
                     avatar={<Tag color={item.status === 'completed' ? 'green' : item.status === 'failed' ? 'red' : 'default'}>{index + 1}</Tag>}
                     title={(
                       <Space wrap>
-                        <span>{toolLabel[item.tool] || 'Agent 工具'}</span>
+                        <span>{toolLabel[item.tool] || '学习功能'}</span>
                         {item.risk ? (
                           <Tag color={item.risk === 'write_safe' ? 'orange' : 'blue'}>
                             {riskLabel[item.risk] || '安全操作'}
@@ -471,7 +471,7 @@ export default function LearningAgent() {
           title={
             <Space wrap>
               <RobotOutlined />
-              <span>{aiPlan.title}</span>
+              <span>{safeUiText(aiPlan.title, '学习计划')}</span>
               <Tag color={aiPlan.generated_by === 'ai' ? 'purple' : 'default'}>
                 {aiPlan.generated_by === 'ai' ? 'AI 规划' : '规则兜底'}
               </Tag>
@@ -481,7 +481,7 @@ export default function LearningAgent() {
         >
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              {aiPlan.rationale}
+              {safeUiText(aiPlan.rationale, '根据当前学习情况生成。')}
             </Typography.Paragraph>
             <Space wrap>
               <Button
@@ -508,10 +508,10 @@ export default function LearningAgent() {
                 >
                   <List.Item.Meta
                     avatar={<Tag color={index === 0 ? 'red' : 'blue'}>{index + 1}</Tag>}
-                    title={item.title}
+                    title={safeUiText(item.title, '学习任务')}
                     description={(
                       <Space direction="vertical" size={4}>
-                        <Typography.Text type="secondary">{item.reason}</Typography.Text>
+                        <Typography.Text type="secondary">{safeUiText(item.reason)}</Typography.Text>
                         {item.type === 'generate_questions' ? (
                           <Typography.Text type="secondary">
                             预计生成 {item.estimated_questions || item.count_per_text || 0} 题
@@ -523,7 +523,7 @@ export default function LearningAgent() {
                             <Tag color={item.tool_call.risk === 'write_safe' ? 'orange' : 'blue'}>
                               {riskLabel[item.tool_call.risk] || '安全操作'}
                             </Tag>
-                            <Tag>{toolLabel[item.tool_call.tool] || 'Agent 工具'}</Tag>
+                            <Tag>{toolLabel[item.tool_call.tool] || '学习功能'}</Tag>
                             {item.execution_status ? (
                               <Tag color={executionColor[item.execution_status] || 'default'}>
                                 {executionLabel[item.execution_status] || '已处理'}
@@ -584,14 +584,14 @@ export default function LearningAgent() {
             </Space>
             <List
               size="small"
-              locale={{ emptyText: '完成训练后，Agent 会逐步建立学生模型。' }}
+              locale={{ emptyText: '完成训练后，学习助手会逐步建立学习画像。' }}
               dataSource={plan.snapshot.learnerProfile.priorities.slice(0, 5)}
               renderItem={(item) => (
                 <List.Item>
                   <List.Item.Meta
                     title={(
                       <Space wrap>
-                        <span>{item.label}</span>
+                        <span>{learnerScopeValueLabel(item.scope_type, item.label)}</span>
                         <Tag>{learnerScopeLabel(item.scope_type)}</Tag>
                         {item.review_due ? <Tag color="red">该复习了</Tag> : null}
                       </Space>
@@ -613,7 +613,7 @@ export default function LearningAgent() {
               dataSource={plan.insights}
               renderItem={(item) => (
                 <List.Item>
-                  <Typography.Text>{item}</Typography.Text>
+                  <Typography.Text>{safeUiText(item)}</Typography.Text>
                 </List.Item>
               )}
             />
@@ -634,9 +634,9 @@ export default function LearningAgent() {
                   ]}
                 >
                   <List.Item.Meta
-                    avatar={<Tag color={item.priority === 1 ? 'red' : item.priority === 2 ? 'orange' : 'blue'}>P{item.priority}</Tag>}
-                    title={item.title}
-                    description={item.description}
+                    avatar={<Tag color={item.priority === 1 ? 'red' : item.priority === 2 ? 'orange' : 'blue'}>{priorityLabel(item.priority)}</Tag>}
+                    title={safeUiText(item.title, '学习任务')}
+                    description={safeUiText(item.description)}
                   />
                 </List.Item>
               )}
@@ -653,4 +653,17 @@ function learnerScopeLabel(scopeType: string) {
   if (scopeType === 'weak_point') return '薄弱点';
   if (scopeType === 'question_type') return '题型';
   return '题目';
+}
+
+function learnerScopeValueLabel(scopeType: string, value?: string) {
+  if (scopeType === 'question_type') return questionTypeLabel(value);
+  if (scopeType === 'article') return safeUiLabel(value, '已移除文章');
+  if (scopeType === 'weak_point') return safeUiLabel(value, '已移除薄弱点');
+  return safeUiLabel(value, '学习内容');
+}
+
+function priorityLabel(priority: number) {
+  if (priority === 1) return '优先';
+  if (priority === 2) return '其次';
+  return '可选';
 }

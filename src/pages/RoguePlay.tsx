@@ -348,7 +348,7 @@ function HeartBar({ hearts, max }: { hearts: number; max: number }) {
   const cells: any[] = [];
   for (let i = 0; i < max; i++) {
     const v = hearts - i;
-    if (v >= 1) cells.push(<span key={i} className="heart" style={{ background: '#ff5c8a' }} />);
+    if (v >= 1) cells.push(<span key={i} className="heart" style={{ background: 'var(--ui-danger)' }} />);
     else if (v === 0.5) cells.push(<span key={i} className="heart half" />);
     else cells.push(<span key={i} className="heart empty" />);
   }

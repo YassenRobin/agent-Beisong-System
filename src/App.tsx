@@ -40,11 +40,11 @@ const MENU = [
   { key: '/weak-points', icon: <AuditOutlined />, label: <Link to="/weak-points">易错点</Link> },
   { key: '/train', icon: <ThunderboltOutlined />, label: <Link to="/train">普通训练</Link> },
   { key: '/creative-recite', icon: <ReadOutlined />, label: <Link to="/creative-recite">创新背诵</Link> },
-  { key: '/rogue', icon: <FireOutlined />, label: <Link to="/rogue">Rogue 副本</Link> },
+  { key: '/rogue', icon: <FireOutlined />, label: <Link to="/rogue">闯关副本</Link> },
   { key: '/favorites', icon: <StarOutlined />, label: <Link to="/favorites">收藏夹</Link> },
   { key: '/wrong', icon: <SnippetsOutlined />, label: <Link to="/wrong">错题本</Link> },
   { key: '/rankings', icon: <BarChartOutlined />, label: <Link to="/rankings">排行榜</Link> },
-  { key: '/api', icon: <SettingOutlined />, label: <Link to="/api">API 配置</Link> },
+  { key: '/api', icon: <SettingOutlined />, label: <Link to="/api">AI 服务配置</Link> },
 ];
 
 const KEEP_ALIVE_COMPONENTS: Record<KeepAlivePath, JSX.Element> = {
@@ -96,61 +96,60 @@ export default function App() {
   return (
     <>
       <Layout className="app-shell">
-      <Sider width={220} theme="light" className="app-sidebar" style={{ borderRight: '1px solid #ece9f6' }}>
-        <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid #ece9f6' }}>
-          <Typography.Title level={4} style={{ margin: 0, color: '#5d3fd3' }} className="serif">
-            <HeartOutlined style={{ marginRight: 8 }} />
-            古诗文背诵闯关
-          </Typography.Title>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            桌面版 · 本地优先
-          </Typography.Text>
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selected]}
-          items={MENU}
-          style={{ borderRight: 0, paddingTop: 8 }}
-        />
-      </Sider>
-      <Layout className="app-main-shell">
-        <Header className="app-header" style={{ background: '#fff', borderBottom: '1px solid #ece9f6', padding: '0 24px' }}>
-          <Space size="middle">
-            <TrophyOutlined style={{ color: '#fa8c16', fontSize: 18 }} />
-            <Typography.Text strong style={{ fontSize: 16 }}>高中古诗文背诵闯关系统</Typography.Text>
-            {activeProvider ? (
-              <Tag color="purple">当前 AI: {activeProvider.name}</Tag>
-            ) : (
-              <Tag color="default">未配置 AI</Tag>
-            )}
-          </Space>
-        </Header>
-        <Content className="app-content">
-          {KEEP_ALIVE_PATHS.filter((path) => mountedKeepAlivePaths.includes(path)).map((path) => (
-            <div
-              key={path}
-              className="app-content-scroll"
-              style={{ display: activeKeepAlivePath === path ? 'block' : 'none' }}
-            >
-              {KEEP_ALIVE_COMPONENTS[path]}
-            </div>
-          ))}
-          {!activeKeepAlivePath ? (
-            <div className="app-content-scroll">
-              <Routes>
-                <Route path="/articles/new" element={<ArticleEditor />} />
-                <Route path="/articles/:id" element={<ArticleEditor />} />
-                <Route path="/weak-points/new" element={<WeakPointEditor />} />
-                <Route path="/weak-points/:id" element={<WeakPointEditor />} />
-                <Route path="/rogue/:dungeonId" element={<RogueDetail />} />
-                <Route path="/rogue/play/:dungeonId" element={<RoguePlay />} />
-                <Route path="/result/:runId" element={<Result />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
-          ) : null}
-        </Content>
-      </Layout>
+        <Sider width={220} theme="light" className="app-sidebar">
+          <div className="app-brand">
+            <Typography.Title level={4} className="serif app-brand__title">
+              <HeartOutlined className="app-brand__icon" />
+              古诗文背诵闯关
+            </Typography.Title>
+            <Typography.Text type="secondary" className="app-brand__subtitle">
+              桌面版 · 本地优先
+            </Typography.Text>
+          </div>
+          <Menu
+            mode="inline"
+            selectedKeys={[selected]}
+            items={MENU}
+          />
+        </Sider>
+        <Layout className="app-main-shell">
+          <Header className="app-header">
+            <Space size="middle">
+              <TrophyOutlined className="app-header__trophy" />
+              <Typography.Text strong className="app-header__title">高中古诗文背诵闯关系统</Typography.Text>
+              {activeProvider ? (
+                <Tag color="purple">当前 AI: {activeProvider.name}</Tag>
+              ) : (
+                <Tag color="default">未配置 AI</Tag>
+              )}
+            </Space>
+          </Header>
+          <Content className="app-content">
+            {KEEP_ALIVE_PATHS.filter((path) => mountedKeepAlivePaths.includes(path)).map((path) => (
+              <div
+                key={path}
+                className="app-content-scroll"
+                style={{ display: activeKeepAlivePath === path ? 'block' : 'none' }}
+              >
+                {KEEP_ALIVE_COMPONENTS[path]}
+              </div>
+            ))}
+            {!activeKeepAlivePath ? (
+              <div className="app-content-scroll">
+                <Routes>
+                  <Route path="/articles/new" element={<ArticleEditor />} />
+                  <Route path="/articles/:id" element={<ArticleEditor />} />
+                  <Route path="/weak-points/new" element={<WeakPointEditor />} />
+                  <Route path="/weak-points/:id" element={<WeakPointEditor />} />
+                  <Route path="/rogue/:dungeonId" element={<RogueDetail />} />
+                  <Route path="/rogue/play/:dungeonId" element={<RoguePlay />} />
+                  <Route path="/result/:runId" element={<Result />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </div>
+            ) : null}
+          </Content>
+        </Layout>
       </Layout>
       {showOpeningCurtain ? (
         <OpeningCurtain onComplete={() => setShowOpeningCurtain(false)} />

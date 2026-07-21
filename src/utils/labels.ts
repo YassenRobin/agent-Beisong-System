@@ -60,6 +60,45 @@ export const ARTICLE_TYPE_LABELS: Record<string, string> = {
   lun: '论',
 };
 
+const INTERNAL_DISPLAY_LABELS: Record<string, string> = {
+  ...QUESTION_TYPE_LABELS,
+  write_safe: '安全写入',
+  completed: '已完成',
+  failed: '失败',
+  skipped: '已跳过',
+  pending: '待处理',
+  running: '进行中',
+  win: '已通关',
+  lose: '未通关',
+  weak_point: '薄弱点',
+  question_type: '题型',
+  'snapshot.learning_context': '学习概况',
+  'article.list_enabled': '可用文章',
+  'question.agent_generate': '智能出题',
+  'question.generate_for_articles': '按文章生成题目',
+  'question.generate_for_weak_point': '薄弱点专项出题',
+  'rogue.generate_and_save': '生成闯关副本',
+  'wrong.review_queue': '错题复习队列',
+  'favorite.recommend_questions': '推荐重点题目',
+  'training.start_recommendation': '推荐普通训练',
+  master: '学习统筹',
+  planner: '学习规划',
+  coach: '训练辅导',
+  evaluator: '学习评估',
+};
+
+const TEXT_REPLACEMENTS: Record<string, string> = {
+  ...INTERNAL_DISPLAY_LABELS,
+  'Master Agent': '学习统筹',
+  'Planner Agent': '学习规划',
+  'Question Agent': '出题助手',
+  'Coach Agent': '训练辅导',
+  'Evaluator Agent': '学习评估',
+  Provider: 'AI 服务',
+  Rogue: '闯关',
+  Agent: '学习助手',
+};
+
 export function questionTypeLabel(type?: string) {
   return QUESTION_TYPE_LABELS[type || ''] || '未知题型';
 }
@@ -81,6 +120,33 @@ export function articleTypeLabel(type?: string) {
   if (!value) return '未分类';
   if (ARTICLE_TYPE_LABELS[value]) return ARTICLE_TYPE_LABELS[value];
   return /^[A-Za-z0-9_-]+$/.test(value) ? '未分类' : value;
+}
+
+export function safeUiLabel(value?: unknown, fallback = '未命名内容') {
+  const text = String(value ?? '').trim();
+  if (!text) return fallback;
+  if (INTERNAL_DISPLAY_LABELS[text]) return INTERNAL_DISPLAY_LABELS[text];
+  if (/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/.test(text) || /^[a-z][a-z0-9_-]*$/.test(text)) {
+    return fallback;
+  }
+  return text;
+}
+
+export function safeUiText(value?: unknown, fallback = '暂无说明') {
+  let text = String(value ?? '').trim();
+  if (!text) return fallback;
+  Object.entries(TEXT_REPLACEMENTS)
+    .sort(([a], [b]) => b.length - a.length)
+    .forEach(([internalName, displayName]) => {
+      if (/^[A-Za-z0-9_.-]+$/.test(internalName)) {
+        const escapedName = internalName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        text = text.replace(new RegExp(`(^|[^A-Za-z0-9_])${escapedName}(?=$|[^A-Za-z0-9_])`, 'g'), `$1${displayName}`);
+      } else {
+        text = text.split(internalName).join(displayName);
+      }
+    });
+  text = text.replace(/\b[A-Za-z][A-Za-z0-9]*(?:[._][A-Za-z0-9_-]+)+\b/g, '系统功能');
+  return text;
 }
 
 export function questionTypeListLabel(types?: string[]) {

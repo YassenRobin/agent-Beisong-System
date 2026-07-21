@@ -87,7 +87,7 @@ export default function ApiConfig() {
     setBusy(id);
     try {
       await invoke('provider:activate', { id });
-      message.success('已切换为当前 Provider');
+      message.success('已切换为当前 AI 服务');
       await load();
       notifyProviderChanged();
     } catch (e: any) { message.error(e.message); }
@@ -189,19 +189,19 @@ export default function ApiConfig() {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={3} style={{ margin: 0 }}>API 配置</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增 Provider</Button>
+        <Typography.Title level={3} style={{ margin: 0 }}>AI 服务配置</Typography.Title>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增 AI 服务</Button>
       </Space>
 
       <Alert
-        message="支持 MiniMax / Qwen / Kimi / DeepSeek 四家厂商,均已预填 Base URL 与默认模型"
-        description="选中「激活」即可让所有 AI 调用走这个通道。只需填 API Key 就能用,不需要再手动查文档找接口地址。"
+        message="支持 MiniMax、Qwen、Kimi、DeepSeek，接口地址与默认模型均已预填"
+        description="选择“设为当前服务”后，智能出题和学习建议都会使用该服务。只需填写访问密钥即可。"
         type="info"
         showIcon
       />
 
       {items.length === 0 ? (
-        <Empty description="尚未配置任何 Provider" />
+        <Empty description="尚未配置任何 AI 服务" />
       ) : (
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           {items.map((p) => {
@@ -215,8 +215,8 @@ export default function ApiConfig() {
                   <Space>
                     <ApiOutlined />
                     <span>{preset?.label || p.name}</span>
-                    {p.is_active ? <Tag color="purple" icon={<CheckCircleOutlined />}>当前激活</Tag> : null}
-                    {hasKey ? <Tag color="green" icon={<KeyOutlined />}>已配置 Key</Tag> : <Tag color="default">未配置 Key</Tag>}
+                    {p.is_active ? <Tag color="purple" icon={<CheckCircleOutlined />}>当前使用</Tag> : null}
+                    {hasKey ? <Tag color="green" icon={<KeyOutlined />}>已填写密钥</Tag> : <Tag color="default">未填写密钥</Tag>}
                     {!p.enabled ? <Tag>已停用</Tag> : null}
                   </Space>
                 }
@@ -224,7 +224,7 @@ export default function ApiConfig() {
                   <Space wrap>
                     {!p.is_active && hasKey && (
                       <Button type="primary" icon={<CheckCircleOutlined />} loading={busy === p.id} onClick={() => onActivate(p.id)}>
-                        激活
+                        设为当前服务
                       </Button>
                     )}
                     {hasKey && (
@@ -242,11 +242,11 @@ export default function ApiConfig() {
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
                   {!hasKey && (
                     <Alert
-                      message="该厂商尚未配置 API Key"
+                      message="该服务尚未填写访问密钥"
                       description={
                         <Space>
-                          点击「编辑」填入 Key 即可启用。
-                          <Button size="small" type="link" icon={<KeyOutlined />} onClick={() => openEdit(p)}>填 Key</Button>
+                          点击“编辑”填写密钥后即可启用。
+                          <Button size="small" type="link" icon={<KeyOutlined />} onClick={() => openEdit(p)}>填写密钥</Button>
                         </Space>
                       }
                       type="warning"
@@ -254,7 +254,7 @@ export default function ApiConfig() {
                     />
                   )}
                   <Space wrap size={[8, 4]}>
-                    <Typography.Text type="secondary">Base URL:</Typography.Text>
+                    <Typography.Text type="secondary">接口地址：</Typography.Text>
                     <Typography.Text code copyable={{ tooltips: ['复制', '已复制'] }}>{p.base_url || '(未设置)'}</Typography.Text>
                   </Space>
                   <Space wrap size={[8, 4]}>
@@ -262,7 +262,7 @@ export default function ApiConfig() {
                     <Typography.Text code>{p.default_model || '(未设置)'}</Typography.Text>
                   </Space>
                   <Space wrap size={[8, 4]}>
-                    <Typography.Text type="secondary">API Key:</Typography.Text>
+                    <Typography.Text type="secondary">访问密钥：</Typography.Text>
                     <Typography.Text code>{p.api_key_masked || '(尚未填写)'}</Typography.Text>
                   </Space>
                   {(p.question_model || p.judge_model || p.explain_model) && (
@@ -282,7 +282,7 @@ export default function ApiConfig() {
       )}
 
       <Modal
-        title={editing?.id ? `编辑 · ${PRESETS[form.getFieldValue('provider_type')]?.label || ''}` : '新增 Provider'}
+        title={editing?.id ? `编辑 AI 服务 · ${PRESETS[form.getFieldValue('provider_type')]?.label || ''}` : '新增 AI 服务'}
         open={!!editing}
         onCancel={() => setEditing(null)}
         onOk={onSave}
@@ -298,16 +298,16 @@ export default function ApiConfig() {
             <Select options={TYPE_OPTIONS} placeholder="选择厂商" onChange={onProviderTypeChange} />
           </Form.Item>
 
-          <Divider style={{ margin: '8px 0' }}>接入信息(已预填,可改)</Divider>
+          <Divider style={{ margin: '8px 0' }}>接入信息（已预填，可修改）</Divider>
 
-          <Form.Item label="Base URL" name="base_url" rules={[{ required: true }]}>
+          <Form.Item label="接口地址" name="base_url" rules={[{ required: true }]}>
             <Input placeholder="https://..." />
           </Form.Item>
           <Form.Item
-            label="API Key"
+            label="访问密钥"
             name="api_key"
-            extra={editing?.id ? '留空表示不修改当前 Key' : '填入后将加密保存到本地数据库'}
-            rules={editing?.id ? [] : [{ required: true, message: '请输入 API Key' }]}
+            extra={editing?.id ? '留空表示不修改当前密钥' : '填写后将加密保存在本机'}
+            rules={editing?.id ? [] : [{ required: true, message: '请输入访问密钥' }]}
           >
             <Input.Password placeholder="sk-..." />
           </Form.Item>
@@ -315,7 +315,7 @@ export default function ApiConfig() {
             <Input placeholder="如 qwen-plus / MiniMax-M2" />
           </Form.Item>
 
-          <Divider style={{ margin: '8px 0' }}>分场景模型(默认全部用主模型,无需改动)</Divider>
+          <Divider style={{ margin: '8px 0' }}>分场景模型（默认使用主模型，无需修改）</Divider>
 
           <Space size="middle" style={{ display: 'flex' }} wrap>
             <Form.Item label="生题" name="question_model"><Input style={{ width: 200 }} /></Form.Item>
@@ -327,8 +327,8 @@ export default function ApiConfig() {
 
           <Divider style={{ margin: '8px 0' }}>高级</Divider>
           <Space size="middle" wrap>
-            <Form.Item label="temperature" name="temperature"><Input type="number" step={0.1} min={0} max={2} style={{ width: 120 }} /></Form.Item>
-            <Form.Item label="max_tokens" name="max_tokens"><Input type="number" min={64} style={{ width: 140 }} /></Form.Item>
+            <Form.Item label="回答随机度" name="temperature"><Input type="number" step={0.1} min={0} max={2} style={{ width: 120 }} /></Form.Item>
+            <Form.Item label="最大输出长度" name="max_tokens"><Input type="number" min={64} style={{ width: 140 }} /></Form.Item>
             <Form.Item label="启用" name="enabled" valuePropName="checked"><Switch /></Form.Item>
           </Space>
         </Form>

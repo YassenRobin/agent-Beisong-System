@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { HashRouter } from 'react-router-dom';
 import { ConfigProvider, App as AntdApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import App from './App';
@@ -16,17 +16,27 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: '#8b5cf6',
-          colorBgLayout: '#f5f5f7',
+          colorPrimary: '#7d2b20',
+          colorInfo: '#7d2b20',
+          colorSuccess: '#5e7258',
+          colorWarning: '#b67a22',
+          colorError: '#9c3d32',
+          colorText: '#2b2119',
+          colorTextSecondary: '#716457',
+          colorBgLayout: '#eee4d0',
+          colorBgContainer: '#fffaf0',
+          colorBorder: '#d8c8aa',
+          colorBorderSecondary: '#e6dac2',
+          colorFillAlter: '#f4ead6',
           borderRadius: 8,
           fontFamily: '"Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif',
         },
       }}
     >
       <AntdApp>
-        <BrowserRouter>
+        <HashRouter>
           <App />
-        </BrowserRouter>
+        </HashRouter>
       </AntdApp>
     </ConfigProvider>
   </React.StrictMode>,

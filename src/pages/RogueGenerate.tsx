@@ -88,7 +88,7 @@ export default function RogueGenerate() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Typography.Title level={3} style={{ margin: 0 }}>Rogue 副本生成</Typography.Title>
+      <Typography.Title level={3} style={{ margin: 0 }}>闯关副本生成</Typography.Title>
       <Alert message={STAR_DESC[5]} type="info" showIcon />
 
       <Row gutter={16}>
@@ -150,7 +150,7 @@ export default function RogueGenerate() {
             ) : (
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <Typography.Title level={4} style={{ margin: 0 }}>
-                  <StarFilled style={{ color: '#fa8c16', marginRight: 6 }} />
+                  <StarFilled style={{ color: 'var(--ui-gold)', marginRight: 6 }} />
                   {result.dungeon.name}
                 </Typography.Title>
                 <Space wrap>
@@ -182,7 +182,7 @@ export default function RogueGenerate() {
         ) : (
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
             {dungeons.map((d) => (
-              <Space key={d.id} style={{ width: '100%', justifyContent: 'space-between', padding: 8, background: '#fafafa', borderRadius: 8 }}>
+              <Space key={d.id} style={{ width: '100%', justifyContent: 'space-between', padding: 8, background: 'var(--ui-paper-soft)', borderRadius: 8 }}>
                 <Space>
                   <Tag color="purple">{d.star} 星</Tag>
                   <span>{d.name}</span>
