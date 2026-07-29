@@ -44,6 +44,10 @@ async function main() {
   assert.equal(badJsonRun.roles[0].role, 'planner');
   assert.ok(badJsonRun.roles.some((role) => role.role === 'coach'));
   assert.equal(badJsonRun.roles.at(-1)?.role, 'master');
+  assert.match(badJsonRun.roles.at(-1)?.summary || '', /^学习统筹/);
+  assert.doesNotMatch(badJsonRun.summary, /\b(?:Master|Planner|Question|Coach|Evaluator)(?: Agent)?\b/);
+  assert.ok(badJsonRun.roles.every((role) => !/\b(?:Master|Planner|Question|Coach|Evaluator) Agent\b/.test(role.summary)));
+  assert.ok(badJsonRun.roles.every((role) => !role.summary.includes('question.agent_generate')));
 
   const noWrongSnapshot = { ...snapshot, wrongItems: [] };
   const aiExecuted: string[] = [];
@@ -69,6 +73,9 @@ async function main() {
   assert.equal(aiRun.mode, 'ai');
   assert.deepEqual(aiExecuted, ['fill_question_bank']);
   assert.equal(aiRun.steps[0].tool, 'question.agent_generate');
+  assert.match(aiRun.roles.find((role) => role.role === 'question')?.summary || '', /^出题助手/);
+  assert.ok(aiRun.roles.every((role) => !/\b(?:Master|Planner|Question|Coach|Evaluator) Agent\b/.test(role.summary)));
+  assert.ok(aiRun.roles.every((role) => !role.summary.includes('question.agent_generate')));
   assert.equal(aiRun.roles[0].role, 'planner');
 
   const dangerousRun = await runMasterAgent({

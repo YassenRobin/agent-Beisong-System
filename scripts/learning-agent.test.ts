@@ -15,6 +15,7 @@ assert.equal(emptyPlan.status, 'setup');
 assert.equal(emptyPlan.primaryAction.route, '/articles');
 assert.equal(emptyPlan.primaryAction.type, 'setup_articles');
 assert.ok(emptyPlan.insights.some((item) => item.includes('文章')));
+assert.doesNotMatch(emptyPlan.primaryAction.description, /\bAgent\b/);
 
 const generatePlan = buildLearningAgentPlan({
   texts: 3,
@@ -59,6 +60,7 @@ const weakPointPlan = buildLearningAgentPlan({
 assert.equal(weakPointPlan.status, 'weak_point_focus');
 assert.equal(weakPointPlan.primaryAction.route, '/weak-points');
 assert.equal(weakPointPlan.primaryAction.type, 'practice_weak_point');
+assert.doesNotMatch(weakPointPlan.summary, /\bAgent\b/);
 assert.ok(weakPointPlan.insights[0].includes('通假字'));
 assert.ok(weakPointPlan.actions.some((action) => action.route === '/wrong'));
 assert.ok(weakPointPlan.actions.some((action) => action.route === '/rogue/dg_1'));

@@ -60,8 +60,17 @@ export const ARTICLE_TYPE_LABELS: Record<string, string> = {
   lun: '论',
 };
 
+export const AGENT_ROLE_LABELS: Record<string, string> = {
+  master: '学习统筹',
+  planner: '学习规划',
+  question: '出题助手',
+  coach: '训练辅导',
+  evaluator: '学习评估',
+};
+
 const INTERNAL_DISPLAY_LABELS: Record<string, string> = {
   ...QUESTION_TYPE_LABELS,
+  ...AGENT_ROLE_LABELS,
   write_safe: '安全写入',
   completed: '已完成',
   failed: '失败',
@@ -81,19 +90,15 @@ const INTERNAL_DISPLAY_LABELS: Record<string, string> = {
   'wrong.review_queue': '错题复习队列',
   'favorite.recommend_questions': '推荐重点题目',
   'training.start_recommendation': '推荐普通训练',
-  master: '学习统筹',
-  planner: '学习规划',
-  coach: '训练辅导',
-  evaluator: '学习评估',
 };
 
 const TEXT_REPLACEMENTS: Record<string, string> = {
   ...INTERNAL_DISPLAY_LABELS,
-  'Master Agent': '学习统筹',
-  'Planner Agent': '学习规划',
-  'Question Agent': '出题助手',
-  'Coach Agent': '训练辅导',
-  'Evaluator Agent': '学习评估',
+  'Master Agent': AGENT_ROLE_LABELS.master,
+  'Planner Agent': AGENT_ROLE_LABELS.planner,
+  'Question Agent': AGENT_ROLE_LABELS.question,
+  'Coach Agent': AGENT_ROLE_LABELS.coach,
+  'Evaluator Agent': AGENT_ROLE_LABELS.evaluator,
   Provider: 'AI 服务',
   Rogue: '闯关',
   Agent: '学习助手',

@@ -28,10 +28,10 @@ export function evaluateMasteryEvidence(input: {
       ? 'mastered'
       : 'continue';
   const summary = outcome === 'incomplete'
-    ? `Evaluator Agent 仅收到 ${total}/${input.minimum_attempts} 条有效证据，继续等待训练。`
+    ? `学习评估目前仅收到 ${total}/${input.minimum_attempts} 条有效记录，将继续等待训练完成。`
     : outcome === 'mastered'
-      ? `Evaluator Agent 判定目标达成，正确率 ${Math.round(accuracy * 100)}%。`
-      : `Evaluator Agent 判定尚未掌握，正确率 ${Math.round(accuracy * 100)}%，需要重规划。`;
+      ? `学习评估确认目标已达成，正确率为 ${Math.round(accuracy * 100)}%。`
+      : `学习评估确认当前尚未掌握，正确率为 ${Math.round(accuracy * 100)}%，需要重新规划训练。`;
   return {
     outcome,
     total,

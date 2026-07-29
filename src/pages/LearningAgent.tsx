@@ -11,7 +11,7 @@ import {
 } from '@ant-design/icons';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { invoke } from '../api/ipc';
-import { questionTypeLabel, questionTypeListLabel, safeUiLabel, safeUiText } from '../utils/labels';
+import { AGENT_ROLE_LABELS, questionTypeLabel, questionTypeListLabel, safeUiLabel, safeUiText } from '../utils/labels';
 
 type AgentAction = {
   type: string;
@@ -168,14 +168,6 @@ const toolLabel: Record<string, string> = {
   'wrong.review_queue': '读取错题复习队列',
   'favorite.recommend_questions': '推荐重点题目',
   'training.start_recommendation': '推荐普通训练',
-};
-
-const agentRoleLabel: Record<string, string> = {
-  master: '学习统筹',
-  planner: '学习规划',
-  question: '出题助手',
-  coach: '训练辅导',
-  evaluator: '学习评估',
 };
 
 const routeLabel: Record<string, string> = {
@@ -415,7 +407,7 @@ export default function LearningAgent() {
             <Space wrap>
               {agentRun.roles?.map((role, index) => (
                 <Tag key={`${role.role}-${index}`} color={role.status === 'completed' ? 'purple' : role.status === 'failed' ? 'red' : 'default'}>
-                  {agentRoleLabel[role.role] || '学习协作'} · {role.status === 'completed' ? '完成' : role.status === 'failed' ? '失败' : '跳过'}
+                  {AGENT_ROLE_LABELS[role.role] || '学习协作'} · {role.status === 'completed' ? '完成' : role.status === 'failed' ? '失败' : '跳过'}
                 </Tag>
               ))}
             </Space>
@@ -425,7 +417,7 @@ export default function LearningAgent() {
                 dataSource={agentRun.roles}
                 renderItem={(role) => (
                   <List.Item>
-                    <List.Item.Meta title={agentRoleLabel[role.role] || '学习协作'} description={safeUiText(role.summary)} />
+                    <List.Item.Meta title={AGENT_ROLE_LABELS[role.role] || '学习协作'} description={safeUiText(role.summary)} />
                   </List.Item>
                 )}
               />

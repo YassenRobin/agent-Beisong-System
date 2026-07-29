@@ -496,7 +496,7 @@ export function buildLearningAgentPlan(snapshot: LearningAgentSnapshot): Learnin
     headline = '先建立文章库';
     summary = '学习智能助手需要文章作为诊断和出题的基础。';
     insights.push('当前还没有文章，先导入或新建背诵篇目。');
-    primaryAction = action('setup_articles', '添加文章', '录入课内篇目后，Agent 才能安排出题和训练。', '/articles', 1);
+    primaryAction = action('setup_articles', '添加文章', '录入课内篇目后，学习智能助手才能安排出题和训练。', '/articles', 1);
   } else if (!snapshot.activeProvider && snapshot.questions < minimumQuestionCount) {
     status = 'needs_api';
     headline = '先配置 AI Provider';
@@ -512,7 +512,7 @@ export function buildLearningAgentPlan(snapshot: LearningAgentSnapshot): Learnin
   } else if (weakFocus) {
     status = 'weak_point_focus';
     headline = '优先处理薄弱点';
-    summary = 'Agent 发现有薄弱点准确率偏低或错误次数偏高。';
+    summary = '学习智能助手发现有薄弱点准确率偏低或错误次数偏高。';
     insights.push(`${weakFocus.title} 是当前优先项，准确率 ${Math.round((weakFocus.accuracy ?? 0) * 100)}%，错误 ${weakFocus.wrong_count ?? 0} 次。`);
     primaryAction = action('practice_weak_point', '专项训练薄弱点', '先围绕这个薄弱点补题、训练，再进入综合复习。', '/weak-points', 1);
   } else if (snapshot.wrongItems.length > 0) {

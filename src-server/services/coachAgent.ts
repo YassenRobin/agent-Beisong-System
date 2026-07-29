@@ -24,16 +24,16 @@ export function planWeakPointRound(input: {
   const previous = input.previous_evaluation;
   let strategy: CoachStrategy = 'balanced';
   let questionTypes = ['blank', 'context_recitation'];
-  let rationale = '首轮使用挖空与文脉默写组合，建立基础证据。';
+  let rationale = '训练辅导已选择挖空与文脉默写组合，用于建立基础学习证据。';
 
   if (previous && previous.accuracy < 0.6) {
     strategy = 'foundation';
     questionTypes = ['blank'];
-    rationale = `上一轮正确率 ${Math.round(previous.accuracy * 100)}%，先降低迁移负担并强化准确回忆。`;
+    rationale = `训练辅导根据上一轮 ${Math.round(previous.accuracy * 100)}% 的正确率，先降低迁移负担并强化准确回忆。`;
   } else if (previous) {
     strategy = 'transfer';
     questionTypes = ['context_recitation', 'blank'];
-    rationale = `上一轮正确率 ${Math.round(previous.accuracy * 100)}%，继续用文脉迁移检验稳定掌握。`;
+    rationale = `训练辅导根据上一轮 ${Math.round(previous.accuracy * 100)}% 的正确率，继续用文脉迁移检验掌握稳定性。`;
   }
 
   return {

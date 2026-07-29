@@ -147,7 +147,7 @@ export async function runPlannerAgent(opts: RunPlannerAgentOptions): Promise<Pla
     trace: {
       role: 'planner',
       status: 'completed',
-      summary: mode === 'ai' ? 'Planner Agent 已根据学生模型选择学习工具。' : 'Planner Agent 已使用确定性策略生成安全计划。',
+      summary: mode === 'ai' ? '学习规划已根据学生模型选择本轮学习任务。' : '学习规划已采用确定性策略生成安全计划。',
       output: { mode, tool_calls: calls },
     },
   };

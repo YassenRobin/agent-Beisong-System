@@ -8,7 +8,7 @@ import {
   recordAgentStepResult,
   transitionAgentRun,
 } from './agentRuntime';
-import type { AgentRole, AgentRoleTrace } from './agentRoles';
+import { agentRoleLabel, type AgentRole, type AgentRoleTrace } from './agentRoles';
 import { runPlannerAgent } from './plannerAgent';
 
 export type MasterAgentStep = AgentToolExecutionResult & {
@@ -43,17 +43,41 @@ function roleForTool(tool: AgentToolCall['tool']): AgentRole {
   return 'coach';
 }
 
+function actionLabelForTool(tool: AgentToolCall['tool']): string {
+  switch (tool) {
+    case 'question.agent_generate':
+    case 'question.generate_for_articles':
+    case 'question.generate_for_weak_point':
+      return '题目准备';
+    case 'wrong.review_queue':
+      return '错题复习整理';
+    case 'rogue.generate_and_save':
+      return '闯关练习准备';
+    case 'favorite.recommend_questions':
+      return '重点题目推荐';
+    case 'training.start_recommendation':
+      return '训练内容推荐';
+    case 'snapshot.learning_context':
+      return '学习情况整理';
+    case 'article.list_enabled':
+      return '可用文章整理';
+  }
+}
+
 function executionRoleTraces(calls: AgentToolCall[], steps: MasterAgentStep[]): AgentRoleTrace[] {
   const traces: AgentRoleTrace[] = [];
   steps.forEach((step, index) => {
     const call = calls[index];
     if (!call) return;
+    const role = roleForTool(call.tool);
+    const roleLabel = agentRoleLabel(role);
+    const actionLabel = actionLabelForTool(call.tool);
     traces.push({
-      role: roleForTool(call.tool),
+      role,
       status: step.status === 'completed' ? 'completed' : step.status === 'failed' ? 'failed' : 'skipped',
       summary: step.status === 'completed'
-        ? `${roleForTool(call.tool) === 'question' ? 'Question Agent' : 'Coach Agent'} 已完成 ${call.tool}。`
-        : `${call.tool} 未完成：${step.error || '已跳过'}`,
+        ? `${roleLabel}已完成${actionLabel}。`
+        : `${roleLabel}未完成${actionLabel}：${step.error || '已跳过'}。`,
       output: step.result,
     });
   });
@@ -92,7 +116,7 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
     {
       role: 'master',
       status: failed ? 'failed' : 'completed',
-      summary: failed ? 'Master Agent 已停止后续高风险步骤并保留部分结果。' : 'Master Agent 已完成角色调度和结果汇总。',
+      summary: failed ? '学习统筹已停止后续高风险步骤，并保留已完成的结果。' : '学习统筹已完成任务协调和结果汇总。',
     },
   ];
 
@@ -102,8 +126,8 @@ export async function runMasterAgent(opts: RunMasterAgentOptions = {}): Promise<
     status: failed ? 'partial' : 'completed',
     title: planner.mode === 'ai' ? '本轮学习安排完成' : '已按安全规则安排本轮学习',
     summary: planner.mode === 'ai'
-      ? 'Planner、专业子 Agent 与 Master 已完成一次可追踪协作。'
-      : 'Planner 使用确定性策略，专业子 Agent 与 Master 已完成安全协作。',
+      ? '学习规划、专业学习助手与学习统筹已完成本轮可追踪协作。'
+      : '学习规划采用确定性策略，专业学习助手与学习统筹已完成本轮安全协作。',
     roles,
     steps,
     next_route: pickNextRoute(steps),
