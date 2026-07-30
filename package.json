@@ -57,8 +57,12 @@
       ]
     },
     "nsis": {
+      "artifactName": "${productName}-安装版-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "${productName}-便携版-${version}.${ext}"
     }
   }
 }

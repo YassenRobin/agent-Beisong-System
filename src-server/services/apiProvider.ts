@@ -4,6 +4,7 @@
 import { execute, nowIso, selectAll, selectOne, uid, transaction } from '../db/helpers';
 import { decryptSecret, encryptSecret } from './encryption';
 import { ALL_PROVIDERS, getProvider } from '../ai/registry';
+import { formatProviderConnectionFailure } from './providerConnectionMessage';
 
 export const PROVIDER_LABELS: Record<string, string> = {
   MiniMax: 'MiniMax',
@@ -97,6 +98,7 @@ export type ProviderInput = {
 export type ProviderRecord = Omit<ProviderInput, 'api_key'> & {
   id: string;
   api_key_masked: string;
+  api_key_needs_reset: boolean;
   is_active: number;
   created_at: string;
   updated_at: string;
@@ -226,11 +228,27 @@ export async function testProvider(id: string): Promise<{ ok: boolean; message: 
   if (!p) return { ok: false, message: 'Provider 不存在' };
   const provider = getProvider(p.provider_type);
   if (!provider) return { ok: false, message: '不支持的 Provider 类型' };
-  const apiKey = decryptSecret(
-    selectOne<any>(`SELECT api_key_encrypted FROM api_providers WHERE id = ?`, [id])?.api_key_encrypted || '',
-  ).trim();
-  if (!apiKey) return { ok: false, message: '尚未填写 API Key' };
-  return provider.testConnection(apiKey, p.base_url || '', p.default_model || '');
+  const encryptedKey =
+    selectOne<any>(`SELECT api_key_encrypted FROM api_providers WHERE id = ?`, [id])?.api_key_encrypted || '';
+  const apiKey = decryptSecret(encryptedKey).trim();
+  if (!apiKey) {
+    if (encryptedKey) {
+      return {
+        ok: false,
+        message: '已保存的密钥来自另一台电脑，无法在本机读取。请点击“编辑”，重新填写访问密钥并保存。',
+      };
+    }
+    return { ok: false, message: '尚未填写访问密钥' };
+  }
+  const result = await provider.testConnection(apiKey, p.base_url || '', p.default_model || '');
+  if (result.ok) return result;
+  return {
+    ok: false,
+    message: formatProviderConnectionFailure(result.message, {
+      providerType: p.provider_type,
+      baseUrl: p.base_url || '',
+    }),
+  };
 }
 
 export function getActiveProvider(): (ProviderRecord & { api_key_encrypted: string }) | null {
@@ -241,12 +259,14 @@ export function getActiveProvider(): (ProviderRecord & { api_key_encrypted: stri
 
 function toRecord(r: any): ProviderRecord & { api_key_encrypted: string } {
   const enc = r.api_key_encrypted || '';
+  const decryptedKey = enc ? decryptSecret(enc) : '';
   return {
     id: r.id,
     name: r.name,
     provider_type: r.provider_type,
     base_url: r.base_url,
-    api_key_masked: enc ? maskKeyPreview(decryptSecret(enc)) : '',
+    api_key_masked: decryptedKey ? maskKeyPreview(decryptedKey) : '',
+    api_key_needs_reset: Boolean(enc && !decryptedKey),
     api_key_encrypted: enc,
     default_model: r.default_model || '',
     question_model: r.question_model || '',

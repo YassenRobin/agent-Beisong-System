@@ -25,7 +25,7 @@ export abstract class OpenAICompatibleProvider implements AIProvider {
     return `${trimmed}/chat/completions`;
   }
 
-  async chat(req: ChatRequest, apiKey: string, baseUrl: string): Promise<ChatResponse> {
+  protected buildRequestBody(req: ChatRequest): Record<string, unknown> {
     const body: Record<string, unknown> = {
       model: req.model || this.options.defaultModel,
       messages: req.messages,
@@ -35,6 +35,11 @@ export abstract class OpenAICompatibleProvider implements AIProvider {
     if (req.jsonMode) {
       body.response_format = { type: 'json_object' };
     }
+    return body;
+  }
+
+  async chat(req: ChatRequest, apiKey: string, baseUrl: string): Promise<ChatResponse> {
+    const body = this.buildRequestBody(req);
 
     const res = await requestJson({
       url: this.buildUrl(baseUrl),

@@ -15,6 +15,7 @@ type Provider = {
   provider_type: string;
   base_url: string;
   api_key_masked: string;
+  api_key_needs_reset?: boolean;
   default_model?: string;
   question_model?: string;
   judge_model?: string;
@@ -207,6 +208,7 @@ export default function ApiConfig() {
           {items.map((p) => {
             const preset = PRESETS[p.provider_type];
             const hasKey = !!p.api_key_masked;
+            const keyNeedsReset = !!p.api_key_needs_reset;
             return (
               <Card
                 key={p.id}
@@ -216,7 +218,11 @@ export default function ApiConfig() {
                     <ApiOutlined />
                     <span>{preset?.label || p.name}</span>
                     {p.is_active ? <Tag color="purple" icon={<CheckCircleOutlined />}>当前使用</Tag> : null}
-                    {hasKey ? <Tag color="green" icon={<KeyOutlined />}>已填写密钥</Tag> : <Tag color="default">未填写密钥</Tag>}
+                    {keyNeedsReset
+                      ? <Tag color="orange" icon={<KeyOutlined />}>密钥需重新填写</Tag>
+                      : hasKey
+                        ? <Tag color="green" icon={<KeyOutlined />}>已填写密钥</Tag>
+                        : <Tag color="default">未填写密钥</Tag>}
                     {!p.enabled ? <Tag>已停用</Tag> : null}
                   </Space>
                 }
@@ -240,7 +246,19 @@ export default function ApiConfig() {
                 }
               >
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                  {!hasKey && (
+                  {keyNeedsReset ? (
+                    <Alert
+                      message="密钥来自另一台电脑"
+                      description={
+                        <Space>
+                          为保护密钥，换电脑后需要重新填写一次。
+                          <Button size="small" type="link" icon={<KeyOutlined />} onClick={() => openEdit(p)}>重新填写密钥</Button>
+                        </Space>
+                      }
+                      type="warning"
+                      showIcon
+                    />
+                  ) : !hasKey && (
                     <Alert
                       message="该服务尚未填写访问密钥"
                       description={
@@ -302,6 +320,17 @@ export default function ApiConfig() {
 
           <Form.Item label="接口地址" name="base_url" rules={[{ required: true }]}>
             <Input placeholder="https://..." />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(prev, current) => prev.provider_type !== current.provider_type}>
+            {({ getFieldValue }) => getFieldValue('provider_type') === 'MiniMax' ? (
+              <Alert
+                style={{ marginBottom: 16 }}
+                message="MiniMax 的密钥要与站点地址一致"
+                description="中国站密钥使用 https://api.minimaxi.com/v1；国际站密钥使用 https://api.minimax.io/v1。在哪个站点创建密钥，就使用哪个地址。"
+                type="info"
+                showIcon
+              />
+            ) : null}
           </Form.Item>
           <Form.Item
             label="访问密钥"

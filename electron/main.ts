@@ -5,6 +5,7 @@ import { initDatabase, getDatabasePath } from '../src-server/db';
 import { registerIpcHandlers } from '../src-server/ipc/handlers';
 import { loadDotEnv } from '../src-server/services/dotenv';
 import { seedDefaultProviders } from '../src-server/services/apiProvider';
+import { seedBuiltinArticles } from '../src-server/services/article';
 import { resolveDatabasePath } from './paths';
 
 const isDev = !app.isPackaged && !!process.env.VITE_DEV_SERVER_URL;
@@ -24,6 +25,11 @@ async function createWindow() {
 
   initDatabase(dbPath);
   console.log('[beisong] database at', dbPath);
+
+  const articleSeed = seedBuiltinArticles();
+  if (articleSeed.initialized) {
+    console.log('[beisong] builtin articles:', JSON.stringify(articleSeed));
+  }
 
   // 首次启动 seed 4 家厂商(Qwen / Kimi / MiniMax / DeepSeek)
   seedDefaultProviders();

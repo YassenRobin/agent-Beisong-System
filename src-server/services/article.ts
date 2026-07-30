@@ -2,6 +2,7 @@
  * 文章服务:CRUD + 段落/句子管理
  */
 import { execute, nowIso, selectAll, selectOne, transaction, uid } from '../db/helpers';
+import builtinArticlesData from '../data/builtinArticles.json';
 import { refreshMasteryScope } from './learnerModel';
 
 export type TextInput = {
@@ -21,6 +22,48 @@ export type ImportTextResult = {
   created: TextRecord[];
   skipped: Array<{ title: string; reason: 'duplicate_title' | 'invalid'; message?: string }>;
 };
+
+export const BUILTIN_ARTICLE_SEED_KEY = 'builtin_articles_v1';
+export const BUILTIN_ARTICLES: TextInput[] = builtinArticlesData;
+
+export type SeedBuiltinArticlesResult = {
+  initialized: boolean;
+  created: number;
+  preserved: number;
+};
+
+/**
+ * 每个数据库只执行一次内置篇目初始化。
+ * 同名文章视为用户已有内容，保留原文和元数据，不做覆盖。
+ */
+export function seedBuiltinArticles(): SeedBuiltinArticlesResult {
+  const marker = selectOne<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = ?`,
+    [BUILTIN_ARTICLE_SEED_KEY],
+  );
+  if (marker) return { initialized: false, created: 0, preserved: 0 };
+
+  const existingTitles = new Set(listTexts({}).map((row) => normalizeTitle(row.title)));
+  let created = 0;
+  let preserved = 0;
+  transaction(() => {
+    for (const input of BUILTIN_ARTICLES) {
+      const titleKey = normalizeTitle(input.title);
+      if (existingTitles.has(titleKey)) {
+        preserved += 1;
+        continue;
+      }
+      insertText(input);
+      existingTitles.add(titleKey);
+      created += 1;
+    }
+    execute(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)`,
+      [BUILTIN_ARTICLE_SEED_KEY, JSON.stringify({ created, preserved }), nowIso()],
+    );
+  });
+  return { initialized: true, created, preserved };
+}
 
 export function listTexts(opts: { keyword?: string; type?: string; enabled?: number } = {}): TextRecord[] {
   const conditions: string[] = [];
@@ -48,6 +91,10 @@ export function getText(id: string): TextRecord | undefined {
 
 export function createText(input: TextInput): TextRecord {
   assertUniqueTitle(input.title);
+  return insertText(input);
+}
+
+function insertText(input: TextInput): TextRecord {
   const id = uid('tx_');
   const now = nowIso();
   execute(
