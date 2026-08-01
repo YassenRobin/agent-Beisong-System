@@ -114,6 +114,14 @@ npm run pack
 - [x] **Step 9** 收藏整套副本 + 排行榜
 - [x] **Step 10** Electron 打包配置(electron-builder)
 
+## TODO
+
+本仓库当前待完成:
+
+- [x] **Step 1** 72篇选背必背篇按五本书分类
+- [x] **Step 2** 意象题通过AI生成和判定；
+- [x] **Step 3** 删除冗余的keyValue;
+
 ## 数据存储位置
 
 - 开发模式: `C:\Users\<you>\AppData\Roaming\古诗文背诵闯关\data\beisong.db`
