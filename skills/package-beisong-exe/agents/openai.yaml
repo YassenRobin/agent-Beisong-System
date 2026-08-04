@@ -1,0 +1,4 @@
+interface:
+  display_name: "打包 Beisong EXE"
+  short_description: "构建、打包并验证 Beisong Windows 安装版与便携版"
+  default_prompt: "使用 $package-beisong-exe 构建并验证 Beisong 的 Windows 安装版和便携版 EXE。"
