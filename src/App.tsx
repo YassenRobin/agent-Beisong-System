@@ -4,6 +4,7 @@ import {
   HomeOutlined, BookOutlined, EditOutlined, BulbOutlined, SettingOutlined,
   ThunderboltOutlined, FireOutlined, StarOutlined, HeartOutlined, BarChartOutlined,
   SnippetsOutlined, TrophyOutlined, AuditOutlined, ReadOutlined, RobotOutlined,
+  PictureOutlined,
 } from '@ant-design/icons';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { invoke } from './api/ipc';
@@ -21,6 +22,7 @@ import WeakPointList from './pages/WeakPointList';
 import WeakPointEditor from './pages/WeakPointEditor';
 import Train from './pages/Train';
 import CreativeRecite from './pages/CreativeRecite';
+import ImageryTraining from './pages/ImageryTraining';
 import RogueGenerate from './pages/RogueGenerate';
 import RoguePlay from './pages/RoguePlay';
 import RogueDetail from './pages/RogueDetail';
@@ -40,6 +42,7 @@ const MENU = [
   { key: '/weak-points', icon: <AuditOutlined />, label: <Link to="/weak-points">易错点</Link> },
   { key: '/train', icon: <ThunderboltOutlined />, label: <Link to="/train">普通训练</Link> },
   { key: '/creative-recite', icon: <ReadOutlined />, label: <Link to="/creative-recite">创新背诵</Link> },
+  { key: '/imagery-training', icon: <PictureOutlined />, label: <Link to="/imagery-training">意象联想训练</Link> },
   { key: '/rogue', icon: <FireOutlined />, label: <Link to="/rogue">闯关副本</Link> },
   { key: '/favorites', icon: <StarOutlined />, label: <Link to="/favorites">收藏夹</Link> },
   { key: '/wrong', icon: <SnippetsOutlined />, label: <Link to="/wrong">错题本</Link> },
@@ -56,6 +59,7 @@ const KEEP_ALIVE_COMPONENTS: Record<KeepAlivePath, JSX.Element> = {
   '/weak-points': <WeakPointList />,
   '/train': <Train />,
   '/creative-recite': <CreativeRecite />,
+  '/imagery-training': <ImageryTraining />,
   '/rogue': <RogueGenerate />,
   '/favorites': <Favorites />,
   '/wrong': <WrongBook />,

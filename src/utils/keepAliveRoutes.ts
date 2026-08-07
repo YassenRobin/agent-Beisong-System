@@ -7,6 +7,7 @@ export const KEEP_ALIVE_PATHS = [
   '/weak-points',
   '/train',
   '/creative-recite',
+  '/imagery-training',
   '/rogue',
   '/favorites',
   '/wrong',

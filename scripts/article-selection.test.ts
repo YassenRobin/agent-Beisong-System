@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  distributeQuestionCount,
   releaseArticleHoverLock,
   toggleAllArticleSelection,
   toggleArticleSelection,
@@ -27,3 +28,6 @@ assert.deepEqual(allCleared.hoverLockedIds, []);
 const weakPointToggle = toggleArticleSelection(['a'], ['a'], 'b', 'weak_point');
 assert.deepEqual(weakPointToggle.selectedIds, ['b']);
 assert.deepEqual(weakPointToggle.hoverLockedIds, ['a']);
+
+assert.deepEqual(distributeQuestionCount(6, 16), [1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+assert.equal(distributeQuestionCount(20, 16).reduce((sum, count) => sum + count, 0), 20);

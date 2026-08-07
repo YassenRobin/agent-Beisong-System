@@ -16,6 +16,7 @@ import * as masterAgent from '../services/masterAgent';
 import * as agentRuntime from '../services/agentRuntime';
 import * as weakPointLearningLoop from '../services/weakPointLearningLoop';
 import * as training from '../services/training';
+import * as imageryTraining from '../services/imageryTraining';
 import * as ai from '../ai/service';
 import { judgeLocally } from '../services/localJudge';
 import { ALL_PROVIDERS } from '../ai/registry';
@@ -57,6 +58,7 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
 
     // ===== Article =====
     'article:list': (p) => article.listTexts(p || {}),
+    'article:catalogs': () => article.listArticleCatalogs(),
     'article:get': (p) => article.getText(p.id),
     'article:create': (p) => article.createText(p),
     'article:update': (p) => article.updateText(p.id, p),
@@ -72,6 +74,11 @@ export function registerIpcHandlers(ipcMain: IpcMain, _getWindow: () => BrowserW
       article.replaceStructure(p.id, res);
       return res;
     },
+
+    // ===== Imagery Training =====
+    'imagery:scan': (p) => imageryTraining.scanImagery(p || {}),
+    'imagery:recommend': (p) => imageryTraining.recommendImagery(p || {}),
+    'imagery:scopes': () => imageryTraining.listImageryScopes(),
 
     // ===== Question =====
     'question:list': (p) => question.listQuestions(p || {}),

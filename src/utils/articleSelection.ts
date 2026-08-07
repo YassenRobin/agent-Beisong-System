@@ -39,3 +39,11 @@ export function toggleAllArticleSelection(
 export function releaseArticleHoverLock(currentHoverLockedIds: string[], id: string): string[] {
   return currentHoverLockedIds.filter((item) => item !== id);
 }
+
+export function distributeQuestionCount(total: number, buckets: number): number[] {
+  const safeTotal = Math.max(1, Number(total) || 1);
+  const safeBuckets = Math.max(1, Number(buckets) || 1);
+  const base = Math.floor(safeTotal / safeBuckets);
+  const remainder = safeTotal % safeBuckets;
+  return Array.from({ length: safeBuckets }, (_, index) => base + (index < remainder ? 1 : 0));
+}

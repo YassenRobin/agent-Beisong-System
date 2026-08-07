@@ -31,6 +31,8 @@ const textRows = [{
   updated_at: '2026-01-01T00:00:00.000Z',
 }];
 const settings = new Map();
+const catalogs = new Map();
+const catalogRows = [];
 let idSeq = 0;
 
 const originalLoad = Module._load;
@@ -56,6 +58,17 @@ Module._load = function loadWithMocks(request, parent, isMain) {
             updated_at: params[10],
           });
         }
+        if (sql.includes('INSERT INTO catalogs')) {
+          catalogs.set(params[0], { id: params[0], name: params[1] });
+        }
+        if (sql.includes('DELETE FROM catalog_texts')) {
+          for (let i = catalogRows.length - 1; i >= 0; i--) {
+            if (catalogRows[i].text_id === params[0]) catalogRows.splice(i, 1);
+          }
+        }
+        if (sql.includes('INSERT INTO catalog_texts')) {
+          catalogRows.push({ catalog_id: params[0], text_id: params[1], sort_order: params[2] });
+        }
         if (sql.includes('INSERT INTO app_settings')) settings.set(params[0], params[1]);
         return { changes: 1, lastInsertRowid: 1 };
       },
@@ -69,9 +82,21 @@ Module._load = function loadWithMocks(request, parent, isMain) {
           const title = String(params[0] || '').trim().toLowerCase();
           return textRows.find((row) => row.title.trim().toLowerCase() === title && row.id !== params[1]);
         }
+        if (sql.includes('COUNT(*) AS count FROM catalog_texts')) {
+          return { count: catalogRows.filter((row) => row.catalog_id === params[0]).length };
+        }
         return undefined;
       },
-      selectAll: (sql) => sql.includes('SELECT * FROM texts') ? [...textRows] : [],
+      selectAll: (sql) => {
+        if (sql.includes('SELECT * FROM texts')) return [...textRows];
+        if (sql.includes('FROM catalog_texts ct')) {
+          return catalogRows.map((row) => ({
+            ...row,
+            catalog_name: catalogs.get(row.catalog_id)?.name || '',
+          }));
+        }
+        return [];
+      },
     };
   }
   if (request.endsWith('/learnerModel') || request.endsWith('\\learnerModel') || request === './learnerModel') {
@@ -82,22 +107,35 @@ Module._load = function loadWithMocks(request, parent, isMain) {
 
 const article = require('../src-server/services/article.ts');
 
-assert.equal(article.BUILTIN_ARTICLES.length, 40);
-assert.equal(new Set(article.BUILTIN_ARTICLES.map((item) => item.title.trim())).size, 40);
+assert.equal(article.BUILTIN_ARTICLES.length, 72);
+assert.equal(new Set(article.BUILTIN_ARTICLES.map((item) => item.title.trim())).size, 72);
 assert.ok(article.BUILTIN_ARTICLES.every((item) => item.title.trim() && item.full_text.trim()));
+assert.deepEqual(
+  Object.fromEntries(article.listArticleCatalogs().map((item) => [item.id, item.expected_count])),
+  {
+    compulsory_1: 16,
+    compulsory_2: 8,
+    selective_1: 5,
+    selective_2: 7,
+    selective_3: 14,
+    outside_textbook: 10,
+    optional_recitation: 12,
+  },
+);
 
 const first = article.seedBuiltinArticles();
-assert.deepEqual(first, { initialized: true, created: 39, preserved: 1 });
-assert.equal(textRows.length, 40);
+assert.deepEqual(first, { initialized: true, created: 71, preserved: 1, updated: 0, removed: 0, catalogs: 7 });
+assert.equal(textRows.length, 72);
 assert.equal(textRows.find((row) => row.title === '赤壁赋').full_text, '教师已经校订的版本。');
+assert.equal(catalogRows.length, 72);
 
 const second = article.seedBuiltinArticles();
-assert.deepEqual(second, { initialized: false, created: 0, preserved: 0 });
-assert.equal(textRows.length, 40);
+assert.deepEqual(second, { initialized: false, created: 0, preserved: 0, updated: 0, removed: 0, catalogs: 0 });
+assert.equal(textRows.length, 72);
 
 const deletedTitle = '登高';
 textRows.splice(textRows.findIndex((row) => row.title === deletedTitle), 1);
 article.seedBuiltinArticles();
 assert.equal(textRows.some((row) => row.title === deletedTitle), false);
 
-console.log('builtin articles seed once without overwriting teacher content');
+console.log('72 builtin articles seed once with seven catalogs without overwriting teacher content');

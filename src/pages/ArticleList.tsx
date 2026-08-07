@@ -16,22 +16,39 @@ type Article = {
   full_text: string;
   enabled: number;
   updated_at: string;
+  catalog_id?: string;
+  catalog_name?: string;
+  catalog_sort_order?: number;
+};
+
+type ArticleCatalog = {
+  id: string;
+  name: string;
+  description: string;
+  expected_count: number;
+  article_count: number;
 };
 
 export default function ArticleList() {
   const [items, setItems] = useState<Article[]>([]);
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [catalogs, setCatalogs] = useState<ArticleCatalog[]>([]);
+  const [catalogId, setCatalogId] = useState('');
   const [importOpen, setImportOpen] = useState(false);
   const [importJson, setImportJson] = useState('');
   const [importing, setImporting] = useState(false);
   const nav = useNavigate();
 
-  const load = async () => {
+  const load = async (nextCatalogId = catalogId) => {
     setLoading(true);
     try {
-      const rows = await invoke<Article[]>('article:list', { keyword });
+      const [rows, catalogRows] = await Promise.all([
+        invoke<Article[]>('article:list', { keyword, catalog_id: nextCatalogId || undefined }),
+        invoke<ArticleCatalog[]>('article:catalogs'),
+      ]);
       setItems(rows);
+      setCatalogs(catalogRows);
     } catch (e: any) {
       message.error(e.message);
     } finally {
@@ -40,6 +57,11 @@ export default function ArticleList() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const selectCatalog = (nextCatalogId: string) => {
+    setCatalogId(nextCatalogId);
+    load(nextCatalogId);
+  };
 
   const onDelete = async (id: string) => {
     try {
@@ -91,17 +113,43 @@ export default function ArticleList() {
             prefix={<SearchOutlined />}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            onPressEnter={load}
+            onPressEnter={() => load()}
             allowClear
             style={{ width: 280 }}
           />
-          <Button onClick={load}>搜索</Button>
+          <Button onClick={() => load()}>搜索</Button>
           <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>JSON 批量导入</Button>
           <Link to="/articles/new">
             <Button type="primary" icon={<PlusOutlined />}>新增文章</Button>
           </Link>
         </Space>
       </Space>
+
+      <Card size="small" title="按书籍分类" className="textbook-card">
+        <Space wrap size={[8, 10]}>
+          <Button type={!catalogId ? 'primary' : 'default'} onClick={() => selectCatalog('')}>
+            全部篇目（{catalogs.reduce((sum, catalog) => sum + catalog.article_count, 0)}）
+          </Button>
+          {catalogs.map((catalog) => (
+            <Space.Compact key={catalog.id}>
+              <Button
+                type={catalogId === catalog.id ? 'primary' : 'default'}
+                title={catalog.description}
+                onClick={() => selectCatalog(catalog.id)}
+              >
+                {catalog.name}（{catalog.article_count}）
+              </Button>
+              <Button
+                icon={<ThunderboltOutlined />}
+                title={`选择“${catalog.name}”全部篇目进行 AI 出题`}
+                onClick={() => nav(`/ai-generate?catalogId=${catalog.id}`)}
+              >
+                整类出题
+              </Button>
+            </Space.Compact>
+          ))}
+        </Space>
+      </Card>
 
       <Card className="textbook-card">
         <Table
@@ -113,6 +161,7 @@ export default function ArticleList() {
             { title: '标题', dataIndex: 'title', render: (v, r) => <Link to={`/articles/${r.id}`}>{v}</Link> },
             { title: '作者', dataIndex: 'author', width: 120 },
             { title: '朝代', dataIndex: 'dynasty', width: 80 },
+            { title: '大分类', dataIndex: 'catalog_name', width: 140, render: (v) => v ? <Tag color="blue">{v}</Tag> : <Tag>未分类</Tag> },
             { title: '类型', dataIndex: 'type', width: 120, render: (v) => <Tag>{articleTypeLabel(v)}</Tag> },
             { title: '长度', dataIndex: 'length_type', width: 100, render: (v) => v === 'short' ? '短文' : v === 'long' ? '长文' : '-' },
             { title: '状态', dataIndex: 'enabled', width: 80, render: (v) => v ? <Tag color="green">启用</Tag> : <Tag>停用</Tag> },

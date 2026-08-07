@@ -4,7 +4,7 @@ import { CheckSquareOutlined, DeleteOutlined, EyeOutlined, ImportOutlined, Robot
 import { useSearchParams } from 'react-router-dom';
 import { invoke } from '../api/ipc';
 import { MarkedText } from '../components/MarkedText';
-import { releaseArticleHoverLock, toggleAllArticleSelection, toggleArticleSelection } from '../utils/articleSelection';
+import { distributeQuestionCount, releaseArticleHoverLock, toggleAllArticleSelection, toggleArticleSelection } from '../utils/articleSelection';
 import { questionTypeLabel, safeUiLabel } from '../utils/labels';
 
 const TYPE_OPTIONS = [
@@ -32,6 +32,14 @@ type DraftQuestion = {
   explanation?: string;
 };
 
+type ArticleCatalog = {
+  id: string;
+  name: string;
+  description: string;
+  expected_count: number;
+  article_count: number;
+};
+
 function typeLabel(type: string) {
   return TYPE_OPTIONS.find((t) => t.value === type)?.label || questionTypeLabel(type);
 }
@@ -42,14 +50,6 @@ function normalizeStarRange(stars?: number[]): [number, number] {
   return [Math.min(...valid), Math.max(...valid)];
 }
 
-function distributeCount(total: number, buckets: number) {
-  const safeTotal = Math.max(1, Number(total) || 1);
-  const safeBuckets = Math.max(1, buckets);
-  const base = Math.floor(safeTotal / safeBuckets);
-  const remainder = safeTotal % safeBuckets;
-  return Array.from({ length: safeBuckets }, (_, idx) => base + (idx < remainder ? 1 : 0)).map((n) => Math.max(1, n));
-}
-
 function makeDraftId(prefix: string, index: number) {
   return `${prefix}_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -57,6 +57,7 @@ function makeDraftId(prefix: string, index: number) {
 export default function AiGenerate() {
   const [sp] = useSearchParams();
   const [texts, setTexts] = useState<any[]>([]);
+  const [catalogs, setCatalogs] = useState<ArticleCatalog[]>([]);
   const [weakPoints, setWeakPoints] = useState<any[]>([]);
   const [form] = Form.useForm();
   const [generating, setGenerating] = useState(false);
@@ -68,10 +69,21 @@ export default function AiGenerate() {
   const resultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    invoke<any[]>('article:list', {}).then((rows) => {
+    Promise.all([
+      invoke<any[]>('article:list', {}),
+      invoke<ArticleCatalog[]>('article:catalogs'),
+    ]).then(([rows, catalogRows]) => {
       setTexts(rows);
+      setCatalogs(catalogRows);
       const initial = sp.get('textId');
       if (initial) form.setFieldValue('text_ids', [initial]);
+      const initialCatalog = sp.get('catalogId');
+      if (initialCatalog) {
+        form.setFieldsValue({
+          mode: 'article',
+          text_ids: rows.filter((row) => row.catalog_id === initialCatalog).map((row) => row.id),
+        });
+      }
     });
     invoke<any[]>('weak-point:list', { enabled: 1 }).then((rows) => {
       setWeakPoints(rows);
@@ -119,10 +131,11 @@ export default function AiGenerate() {
     const selected = ids.map((id) => texts.find((t) => t.id === id)).filter(Boolean);
     if (!selected.length) throw new Error('请选择文章');
 
-    const counts = distributeCount(v.count, selected.length);
+    const counts = distributeQuestionCount(v.count, selected.length);
     const all: DraftQuestion[] = [];
     for (let i = 0; i < selected.length; i++) {
       const article = selected[i];
+      if (!counts[i]) continue;
       const items = await invoke<any[]>('question:ai-preview', {
         paragraph: article.full_text,
         title: article.title,
@@ -215,6 +228,17 @@ export default function AiGenerate() {
     setHoverLockedIds(next.hoverLockedIds);
   };
 
+  const toggleArticleCatalog = (nextCatalogId: string) => {
+    const catalogIds = texts.filter((text) => text.catalog_id === nextCatalogId).map((text) => text.id);
+    const selectedIds: string[] = form.getFieldValue('text_ids') || [];
+    const catalogIsSelected = catalogIds.length > 0 && catalogIds.every((id) => selectedIds.includes(id));
+    const nextIds = catalogIsSelected
+      ? selectedIds.filter((id) => !catalogIds.includes(id))
+      : [...new Set([...selectedIds, ...catalogIds])];
+    form.setFieldValue('text_ids', nextIds);
+    setHoverLockedIds([]);
+  };
+
   const unlockArticleHover = (id: string) => {
     setHoverLockedIds((ids) => releaseArticleHoverLock(ids, id));
   };
@@ -288,17 +312,35 @@ export default function AiGenerate() {
                       placeholder="输入标题或作者搜索"
                     />
                     {mode !== 'weak_point' ? (
-                      <Space wrap>
-                        <Button
-                          icon={<CheckSquareOutlined />}
-                          onClick={() => toggleAllArticles(selectedIds)}
-                          disabled={!texts.length}
-                        >
-                          {allArticlesSelected ? '取消选择全部文章' : '选择全部文章'}
-                        </Button>
-                        <Typography.Text type="secondary">
-                          已选择 {selectedIds.length} / {texts.length} 篇
-                        </Typography.Text>
+                      <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                        <Space wrap>
+                          {catalogs.map((catalog) => {
+                            const ids = texts.filter((text) => text.catalog_id === catalog.id).map((text) => text.id);
+                            const active = ids.length > 0 && ids.length === selectedIds.length && ids.every((id) => selectedIds.includes(id));
+                            return (
+                              <Button
+                                key={catalog.id}
+                                type={active ? 'primary' : 'default'}
+                                title={catalog.description}
+                                onClick={() => toggleArticleCatalog(catalog.id)}
+                              >
+                                {catalog.name}（{ids.length}）
+                              </Button>
+                            );
+                          })}
+                        </Space>
+                        <Space wrap>
+                          <Button
+                            icon={<CheckSquareOutlined />}
+                            onClick={() => toggleAllArticles(selectedIds)}
+                            disabled={!texts.length}
+                          >
+                            {allArticlesSelected ? '取消选择全部文章' : '选择全部文章'}
+                          </Button>
+                          <Typography.Text type="secondary">
+                            已选择 {selectedIds.length} / {texts.length} 篇；题目总数会在所选篇目间分配
+                          </Typography.Text>
+                        </Space>
                       </Space>
                     ) : null}
                     <div className="article-choice-grid">

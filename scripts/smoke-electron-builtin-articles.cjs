@@ -60,9 +60,11 @@ async function runWorker(app) {
     createText(teacherArticle);
     assert.deepEqual(
       seedBuiltinArticles(),
-      { initialized: true, created: 39, preserved: 1 },
+      { initialized: true, created: 71, preserved: 1, updated: 0, removed: 0, catalogs: 7 },
     );
-    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 40);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 72);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM catalogs').get().count, 7);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM catalog_texts').get().count, 72);
 
     const preserved = getDb().prepare('SELECT * FROM texts WHERE title = ?').get(teacherArticle.title);
     for (const [key, value] of Object.entries(teacherArticle)) {
@@ -72,10 +74,10 @@ async function runWorker(app) {
     const deleted = getDb().prepare('SELECT id FROM texts WHERE title = ?').get('登高');
     assert.ok(deleted?.id, 'missing builtin article 登高');
     deleteText(deleted.id);
-    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 39);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 71);
   } else if (phase === 'restart') {
-    assert.deepEqual(seedBuiltinArticles(), { initialized: false, created: 0, preserved: 0 });
-    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 39);
+    assert.deepEqual(seedBuiltinArticles(), { initialized: false, created: 0, preserved: 0, updated: 0, removed: 0, catalogs: 0 });
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 71);
 
     const preserved = getDb().prepare('SELECT * FROM texts WHERE title = ?').get(teacherArticle.title);
     for (const [key, value] of Object.entries(teacherArticle)) {
@@ -86,8 +88,29 @@ async function runWorker(app) {
       0,
     );
     assert.ok(
-      getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('builtin_articles_v1'),
+      getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get('builtin_articles_v2_72'),
       'missing persistent builtin article seed marker',
+    );
+  } else if (phase === 'migrate') {
+    createText({ ...teacherArticle, title: '赤壁赋', full_text: '旧版内置赤壁赋。' });
+    createText({ ...teacherArticle, title: '氓', full_text: '旧版内置氓。' });
+    createText({ ...teacherArticle, title: '石头城', full_text: '错误占位篇目。' });
+    getDb().prepare(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)`,
+    ).run('builtin_articles_v1', '{}', new Date().toISOString());
+
+    assert.deepEqual(
+      seedBuiltinArticles(),
+      { initialized: true, created: 71, preserved: 0, updated: 1, removed: 2, catalogs: 7 },
+    );
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts').get().count, 72);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts WHERE title = ?').get('氓').count, 0);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts WHERE title = ?').get('石头城').count, 0);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts WHERE title = ?').get('离骚（节选）').count, 1);
+    assert.equal(getDb().prepare('SELECT COUNT(*) AS count FROM texts WHERE title = ?').get('琵琶行（并序）').count, 1);
+    assert.notEqual(
+      getDb().prepare('SELECT full_text FROM texts WHERE title = ?').get('赤壁赋').full_text,
+      '旧版内置赤壁赋。',
     );
   } else {
     throw new Error(`unknown Electron smoke phase: ${phase}`);
@@ -110,6 +133,8 @@ app.whenReady().then(async () => {
   try {
     runElectronPhase('initialize');
     runElectronPhase('restart');
+    removeDatabaseFiles();
+    runElectronPhase('migrate');
     console.log('electron builtin articles cross-restart smoke test passed');
   } finally {
     removeDatabaseFiles();

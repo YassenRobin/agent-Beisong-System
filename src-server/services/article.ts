@@ -2,6 +2,7 @@
  * 文章服务:CRUD + 段落/句子管理
  */
 import { execute, nowIso, selectAll, selectOne, transaction, uid } from '../db/helpers';
+import { ARTICLE_CATALOGS, ARTICLE_CATALOG_VERSION, type ArticleCatalogId } from '../data/articleCatalogs';
 import builtinArticlesData from '../data/builtinArticles.json';
 import { refreshMasteryScope } from './learnerModel';
 
@@ -16,56 +17,121 @@ export type TextInput = {
   enabled?: number;
 };
 
-export type TextRecord = TextInput & { id: string; created_at: string; updated_at: string };
+export type TextRecord = TextInput & {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  catalog_id?: ArticleCatalogId;
+  catalog_name?: string;
+  catalog_sort_order?: number;
+};
+
+export type ArticleCatalogRecord = {
+  id: ArticleCatalogId;
+  name: string;
+  description: string;
+  expected_count: number;
+  article_count: number;
+};
+
+type BuiltinArticleInput = TextInput & {
+  catalog_id: ArticleCatalogId;
+  catalog_sort_order: number;
+};
 
 export type ImportTextResult = {
   created: TextRecord[];
   skipped: Array<{ title: string; reason: 'duplicate_title' | 'invalid'; message?: string }>;
 };
 
-export const BUILTIN_ARTICLE_SEED_KEY = 'builtin_articles_v1';
-export const BUILTIN_ARTICLES: TextInput[] = builtinArticlesData;
+export const LEGACY_BUILTIN_ARTICLE_SEED_KEY = 'builtin_articles_v1';
+export const BUILTIN_ARTICLE_SEED_KEY = 'builtin_articles_v2_72';
+export const BUILTIN_ARTICLES = builtinArticlesData as BuiltinArticleInput[];
+
+const LEGACY_BUILTIN_TITLES = [
+  '赤壁赋', '《论语》十二章', '劝学', '屈原列传（节选）', '谏太宗十思疏', '师说', '阿房宫赋', '六国论',
+  '答司马谏议书', '项脊轩志', '子路、曾皙、冉有、公西华侍坐', '报任安书（节选）', '过秦论（上）', '礼运',
+  '陈情表', '归去来兮辞（并序）', '种树郭橐驼传', '五代史伶官传序', '石钟山记', '登泰山记', '静女', '无衣',
+  '氓', '涉江采芙蓉', '短歌行', '归园田居（其一）', '拟行路难（其四）', '春江花月夜', '蜀道难',
+  '梦游天姥吟留别', '将进酒', '燕歌行', '蜀相', '客至', '登高', '登岳阳楼', '琵琶行（并序）', '李凭箜篌引',
+  '锦瑟', '虞美人', '石头城',
+];
 
 export type SeedBuiltinArticlesResult = {
   initialized: boolean;
   created: number;
   preserved: number;
+  updated: number;
+  removed: number;
+  catalogs: number;
 };
 
 /**
- * 每个数据库只执行一次内置篇目初始化。
- * 同名文章视为用户已有内容，保留原文和元数据，不做覆盖。
+ * 每个数据库只执行一次 72 篇数据集初始化。
+ * 已执行旧版 40 篇初始化的数据库会升级同名篇目，并移除旧数据集中不再使用的篇目。
+ * 没有旧版标记的同名文章视为用户已有内容，保留原文和元数据，只补充分类关系。
  */
 export function seedBuiltinArticles(): SeedBuiltinArticlesResult {
   const marker = selectOne<{ value: string }>(
     `SELECT value FROM app_settings WHERE key = ?`,
     [BUILTIN_ARTICLE_SEED_KEY],
   );
-  if (marker) return { initialized: false, created: 0, preserved: 0 };
+  if (marker) return { initialized: false, created: 0, preserved: 0, updated: 0, removed: 0, catalogs: 0 };
 
-  const existingTitles = new Set(listTexts({}).map((row) => normalizeTitle(row.title)));
+  const legacyMarker = selectOne<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = ?`,
+    [LEGACY_BUILTIN_ARTICLE_SEED_KEY],
+  );
+  const desiredTitles = new Set(BUILTIN_ARTICLES.map((item) => normalizeTitle(item.title)));
+  let existingByTitle = new Map(listTexts({}).map((row) => [normalizeTitle(row.title), row]));
   let created = 0;
   let preserved = 0;
+  let updated = 0;
+  let removed = 0;
+
+  if (legacyMarker) {
+    for (const title of LEGACY_BUILTIN_TITLES) {
+      if (desiredTitles.has(normalizeTitle(title))) continue;
+      const row = existingByTitle.get(normalizeTitle(title));
+      if (!row) continue;
+      deleteText(row.id);
+      removed += 1;
+    }
+    existingByTitle = new Map(listTexts({}).map((row) => [normalizeTitle(row.title), row]));
+  }
+
   transaction(() => {
+    seedArticleCatalogs();
     for (const input of BUILTIN_ARTICLES) {
       const titleKey = normalizeTitle(input.title);
-      if (existingTitles.has(titleKey)) {
-        preserved += 1;
-        continue;
+      let row = existingByTitle.get(titleKey);
+      if (row) {
+        if (legacyMarker && LEGACY_BUILTIN_TITLES.some((title) => normalizeTitle(title) === titleKey)) {
+          updateBuiltinText(row.id, input);
+          updated += 1;
+        } else {
+          preserved += 1;
+        }
+      } else {
+        row = insertText(input);
+        existingByTitle.set(titleKey, row);
+        created += 1;
       }
-      insertText(input);
-      existingTitles.add(titleKey);
-      created += 1;
+      assignTextCatalog(row.id, input.catalog_id, input.catalog_sort_order);
     }
     execute(
       `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)`,
-      [BUILTIN_ARTICLE_SEED_KEY, JSON.stringify({ created, preserved }), nowIso()],
+      [
+        BUILTIN_ARTICLE_SEED_KEY,
+        JSON.stringify({ version: ARTICLE_CATALOG_VERSION, created, preserved, updated, removed }),
+        nowIso(),
+      ],
     );
   });
-  return { initialized: true, created, preserved };
+  return { initialized: true, created, preserved, updated, removed, catalogs: ARTICLE_CATALOGS.length };
 }
 
-export function listTexts(opts: { keyword?: string; type?: string; enabled?: number } = {}): TextRecord[] {
+export function listTexts(opts: { keyword?: string; type?: string; enabled?: number; catalog_id?: string } = {}): TextRecord[] {
   const conditions: string[] = [];
   const params: any[] = [];
   if (opts.keyword) {
@@ -82,7 +148,89 @@ export function listTexts(opts: { keyword?: string; type?: string; enabled?: num
     params.push(opts.enabled);
   }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  return selectAll<TextRecord>(`SELECT * FROM texts ${where} ORDER BY updated_at DESC`, params);
+  const rows = selectAll<TextRecord>(`SELECT * FROM texts ${where} ORDER BY updated_at DESC`, params);
+  const catalogRows = selectAll<{ text_id: string; catalog_id: ArticleCatalogId; catalog_name: string; sort_order: number }>(
+    `SELECT ct.text_id, ct.catalog_id, c.name AS catalog_name, ct.sort_order
+     FROM catalog_texts ct
+     JOIN catalogs c ON c.id = ct.catalog_id`,
+  );
+  const catalogByTextId = new Map(catalogRows.map((row) => [row.text_id, row]));
+  const catalogIndex = new Map(ARTICLE_CATALOGS.map((catalog, index) => [catalog.id, index]));
+  return rows
+    .map((row) => {
+      const catalog = catalogByTextId.get(row.id);
+      return catalog ? {
+        ...row,
+        catalog_id: catalog.catalog_id,
+        catalog_name: catalog.catalog_name,
+        catalog_sort_order: catalog.sort_order,
+      } : row;
+    })
+    .filter((row) => !opts.catalog_id || row.catalog_id === opts.catalog_id)
+    .sort((a, b) => {
+      const categoryDiff = (catalogIndex.get(a.catalog_id as ArticleCatalogId) ?? 999)
+        - (catalogIndex.get(b.catalog_id as ArticleCatalogId) ?? 999);
+      if (categoryDiff) return categoryDiff;
+      const orderDiff = (a.catalog_sort_order ?? 999) - (b.catalog_sort_order ?? 999);
+      if (orderDiff) return orderDiff;
+      return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+    });
+}
+
+export function listArticleCatalogs(): ArticleCatalogRecord[] {
+  return ARTICLE_CATALOGS.map((catalog) => {
+    const count = selectOne<{ count: number }>(
+      `SELECT COUNT(*) AS count FROM catalog_texts WHERE catalog_id = ?`,
+      [catalog.id],
+    )?.count || 0;
+    return {
+      id: catalog.id,
+      name: catalog.name,
+      description: catalog.description,
+      expected_count: catalog.expectedCount,
+      article_count: count,
+    };
+  });
+}
+
+function seedArticleCatalogs() {
+  const now = nowIso();
+  for (const catalog of ARTICLE_CATALOGS) {
+    execute(
+      `INSERT INTO catalogs (id, name, description, version, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, description = excluded.description,
+         version = excluded.version, updated_at = excluded.updated_at`,
+      [catalog.id, catalog.name, catalog.description, ARTICLE_CATALOG_VERSION, now, now],
+    );
+  }
+}
+
+function assignTextCatalog(textId: string, catalogId: ArticleCatalogId, sortOrder: number) {
+  execute(`DELETE FROM catalog_texts WHERE text_id = ?`, [textId]);
+  execute(
+    `INSERT INTO catalog_texts (catalog_id, text_id, sort_order) VALUES (?, ?, ?)`,
+    [catalogId, textId, sortOrder],
+  );
+}
+
+function updateBuiltinText(id: string, input: BuiltinArticleInput) {
+  execute(
+    `UPDATE texts SET title = ?, author = ?, dynasty = ?, type = ?, difficulty = ?, length_type = ?,
+       full_text = ?, enabled = ?, updated_at = ? WHERE id = ?`,
+    [
+      input.title,
+      input.author || '',
+      input.dynasty || '',
+      input.type || '',
+      input.difficulty || '',
+      input.length_type || '',
+      input.full_text,
+      input.enabled ?? 1,
+      nowIso(),
+      id,
+    ],
+  );
 }
 
 export function getText(id: string): TextRecord | undefined {
