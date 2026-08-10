@@ -150,7 +150,7 @@ export default function ImageryTraining() {
         .map((candidate) => candidate.id));
       setReviewFilter(data.accepted_count > 0 ? 'accepted' : data.pending_count > 0 ? 'pending' : 'all');
       if (data.literal_match_count === 0) message.info('当前检索词没有在篇目中找到原句');
-      else if (data.accepted_count === 0) message.info('已有字面命中，但没有自动通过项；请查看待教师判断和误命中');
+      else if (data.accepted_count === 0) message.info('已有字面命中，但没有自动通过项；请查看不符合意象和误命中');
     } catch (error: any) {
       message.error(error?.message || '意象检索失败');
     } finally {
@@ -299,7 +299,7 @@ export default function ImageryTraining() {
                 <Statistic title="规则排除" value={result.rule_filtered_count} suffix="句" />
                 <Statistic title="完成审核" value={result.reviewed_count} suffix="句" />
                 <Statistic title="自动通过" value={result.accepted_count} suffix="句" valueStyle={{ color: '#3f8600' }} />
-                <Statistic title="待教师判断" value={result.pending_count} suffix="句" valueStyle={{ color: '#d48806' }} />
+                <Statistic title="不符合意象" value={result.pending_count} suffix="句" valueStyle={{ color: '#d48806' }} />
                 <Statistic title="误命中" value={result.rejected_count} suffix="句" />
               </Space>
               {result.cache_hit ? <Alert type="success" showIcon message="已使用本地审核缓存，本次未重复调用 AI" /> : null}
@@ -322,7 +322,7 @@ export default function ImageryTraining() {
                 buttonStyle="solid"
                 options={[
                   { label: `自动通过 ${result.accepted_count}`, value: 'accepted' },
-                  { label: `待教师判断 ${result.pending_count}`, value: 'pending' },
+                  { label: `不符合意象 ${result.pending_count}`, value: 'pending' },
                   { label: `误命中 ${result.rejected_count}`, value: 'rejected' },
                   { label: `全部 ${result.candidates.length}`, value: 'all' },
                 ]}
