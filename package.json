@@ -1,6 +1,6 @@
 {
   "name": "beisong",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "高中古诗文背诵闯关系统 — 桌面版",
   "main": "dist-electron/electron/main.js",
   "author": "Beisong Team",

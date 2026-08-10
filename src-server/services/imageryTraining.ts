@@ -1,6 +1,20 @@
+import { createHash } from 'node:crypto';
 import { chat } from '../ai/service';
 import { ARTICLE_CATALOGS, type ArticleCatalogId } from '../data/articleCatalogs';
+import { execute, nowIso, selectAll, selectOne } from '../db/helpers';
 import { safeJsonParse } from './json';
+import { getActiveProvider } from './apiProvider';
+import {
+  buildImagerySearchTerms,
+  isRuleExcludedMatch,
+  type ImagerySearchTerm,
+  type ImageryTermSource,
+} from './imageryLexicon';
+import {
+  parseImageryReviewResponse,
+  type ImageryReviewItem,
+  type ImageryReviewLabel,
+} from './imageryReview';
 import { listTexts } from './article';
 
 export type ImageryGenre = 'all' | '古文' | '诗词曲';
@@ -29,29 +43,37 @@ export type ImageryCandidate = {
   catalog_name?: string;
   sentence: string;
   matched_terms: string[];
+  matched_term_sources: Record<string, ImageryTermSource[]>;
+  label: ImageryReviewLabel;
+  review_status: 'accepted' | 'pending' | 'rejected';
   semantic_match: boolean;
   confidence: number;
   imagery_role: string;
   reason: string;
+  evidence: string;
 };
 
 export type ImageryScanResult = {
   theme: string;
   search_terms: string[];
+  search_term_details: ImagerySearchTerm[];
   scope_article_count: number;
+  literal_match_count: number;
+  rule_filtered_count: number;
+  reviewed_count: number;
   accepted_count: number;
+  pending_count: number;
+  rejected_count: number;
+  truncated_count: number;
+  cache_hit: boolean;
   candidates: ImageryCandidate[];
 };
 
-type ReviewItem = {
-  id: string;
-  semantic_match?: boolean;
-  confidence?: number;
-  imagery_role?: string;
-  reason?: string;
-};
-
 const MAX_CANDIDATES = 100;
+const REVIEW_BATCH_SIZE = 24;
+const REVIEW_PROMPT_VERSION = 'imagery-review-v4';
+const CACHE_PREFIX = 'imagery_review_cache_v4:';
+const MAX_CACHE_ENTRIES = 40;
 const RECOMMENDATION_SEEDS = [
   '风', '月', '雨', '雪', '云', '山', '水', '江', '河', '海', '日', '夕阳', '落日', '星',
   '花', '草', '树', '柳', '松', '竹', '梅', '菊', '荷', '兰', '鸟', '雁', '鸿雁', '猿', '马',
@@ -71,8 +93,16 @@ export async function scanImagery(input: ImageryScanInput): Promise<ImageryScanR
   ));
   if (articles.length === 0) throw new Error('当前范围内没有可检索的篇目');
 
-  const searchTerms = await expandSearchTerms(theme, genre, input.related_terms || []);
-  const literalCandidates = articles.flatMap((article) => (
+  const teacherTerms = uniqueTerms(input.related_terms || []);
+  const cacheKey = buildCacheKey(theme, genre, [...catalogIds], teacherTerms, articles);
+  const cached = readCachedResult(cacheKey);
+  if (cached) return { ...cached, cache_hit: true };
+
+  const aiTerms = await expandSearchTerms(theme, genre, teacherTerms);
+  const searchTermDetails = buildImagerySearchTerms(theme, teacherTerms, aiTerms);
+  const searchTerms = searchTermDetails.map((item) => item.term);
+  const termSources = new Map(searchTermDetails.map((item) => [item.term, item.sources]));
+  const rawCandidates = articles.flatMap((article) => (
     splitSentences(article.full_text).flatMap((sentence, sentenceIndex) => {
       const matchedTerms = searchTerms.filter((term) => sentence.includes(term));
       if (matchedTerms.length === 0) return [];
@@ -87,41 +117,64 @@ export async function scanImagery(input: ImageryScanInput): Promise<ImageryScanR
         catalog_name: article.catalog_name,
         sentence,
         matched_terms: matchedTerms,
+        matched_term_sources: Object.fromEntries(matchedTerms.map((term) => [term, termSources.get(term) || []])),
       }];
     })
-  )).slice(0, MAX_CANDIDATES);
-
-  if (literalCandidates.length === 0) {
-    return {
-      theme,
-      search_terms: searchTerms,
-      scope_article_count: articles.length,
-      accepted_count: 0,
-      candidates: [],
-    };
-  }
-
-  const reviews = await reviewCandidates(theme, genre, literalCandidates);
-  const reviewById = new Map(reviews.map((item) => [item.id, item]));
-  const candidates: ImageryCandidate[] = literalCandidates.map((candidate) => {
-    const review = reviewById.get(candidate.id);
-    return {
-      ...candidate,
-      semantic_match: review?.semantic_match === true,
-      confidence: clampConfidence(review?.confidence),
-      imagery_role: String(review?.imagery_role || '未说明').trim(),
-      reason: String(review?.reason || 'AI 未返回有效判定，暂按排除处理').trim(),
-    };
-  });
-  const acceptedCandidates = candidates.filter((item) => item.semantic_match);
-
-  return {
+  ));
+  const literalCandidates = rawCandidates.filter((candidate) => (
+    !isRuleExcludedMatch(candidate.sentence, theme, candidate.matched_terms)
+  ));
+  const reviewQueue = literalCandidates.slice(0, MAX_CANDIDATES);
+  const baseResult = {
     theme,
     search_terms: searchTerms,
+    search_term_details: searchTermDetails,
     scope_article_count: articles.length,
-    accepted_count: acceptedCandidates.length,
-    candidates: acceptedCandidates,
+    literal_match_count: rawCandidates.length,
+    rule_filtered_count: rawCandidates.length - literalCandidates.length,
+    reviewed_count: reviewQueue.length,
+    truncated_count: Math.max(0, literalCandidates.length - reviewQueue.length),
+    cache_hit: false,
   };
+
+  if (reviewQueue.length === 0) {
+    const result: ImageryScanResult = {
+      ...baseResult,
+      accepted_count: 0,
+      pending_count: 0,
+      rejected_count: 0,
+      candidates: [],
+    };
+    writeCachedResult(cacheKey, result);
+    return result;
+  }
+
+  const reviews = await reviewCandidates(theme, genre, reviewQueue);
+  const reviewById = new Map(reviews.map((item) => [item.id, item]));
+  const candidates: ImageryCandidate[] = reviewQueue.map((candidate) => {
+    const review = reviewById.get(candidate.id);
+    if (!review) throw new Error('AI 审核结果与候选原句无法对应，请重试');
+    const reviewStatus = statusForLabel(review.label);
+    return {
+      ...candidate,
+      label: review.label,
+      review_status: reviewStatus,
+      semantic_match: reviewStatus === 'accepted',
+      confidence: clampConfidence(review.confidence),
+      imagery_role: String(review.imagery_role || '未说明').trim(),
+      reason: String(review.reason || 'AI 未说明判断依据').trim(),
+      evidence: review.evidence,
+    };
+  });
+  const result: ImageryScanResult = {
+    ...baseResult,
+    accepted_count: candidates.filter((item) => item.review_status === 'accepted').length,
+    pending_count: candidates.filter((item) => item.review_status === 'pending').length,
+    rejected_count: candidates.filter((item) => item.review_status === 'rejected').length,
+    candidates,
+  };
+  writeCachedResult(cacheKey, result);
+  return result;
 }
 
 export async function recommendImagery(input: Omit<ImageryScanInput, 'theme' | 'related_terms'>): Promise<ImageryRecommendation[]> {
@@ -198,26 +251,50 @@ async function expandSearchTerms(theme: string, genre: ImageryGenre, suppliedTer
   const aiTerms = Array.isArray(parsed?.search_terms)
     ? parsed.search_terms.map((term) => String(term || '').trim())
     : [];
-  return uniqueTerms([...supplied, ...aiTerms]).slice(0, 16);
+  return uniqueTerms(aiTerms).filter((term) => !supplied.includes(term)).slice(0, 12);
 }
 
 async function reviewCandidates(
   theme: string,
   genre: ImageryGenre,
-  candidates: Array<Omit<ImageryCandidate, 'semantic_match' | 'confidence' | 'imagery_role' | 'reason'>>,
-): Promise<ReviewItem[]> {
-  const payload = candidates.map((item) => ({
-    id: item.id,
-    title: item.title,
-    article_type: item.article_type,
-    sentence: item.sentence,
-    matched_terms: item.matched_terms,
-  }));
+  candidates: Array<Omit<ImageryCandidate,
+    'label' | 'review_status' | 'semantic_match' | 'confidence' | 'imagery_role' | 'reason' | 'evidence'>>,
+): Promise<ImageryReviewItem[]> {
+  const reviews: ImageryReviewItem[] = [];
+  for (let offset = 0; offset < candidates.length; offset += REVIEW_BATCH_SIZE) {
+    const batch = candidates.slice(offset, offset + REVIEW_BATCH_SIZE);
+    const payload = batch.map((item, index) => ({
+      id: String(index),
+      title: item.title,
+      article_type: item.article_type,
+      sentence: item.sentence,
+      matched_terms: item.matched_terms,
+    }));
+    const batchReviews = await reviewCandidateBatch(theme, genre, payload);
+    reviews.push(...batchReviews.map((review) => ({
+      ...review,
+      id: batch[Number(review.id)].id,
+    })));
+  }
+  return reviews;
+}
+
+async function reviewCandidateBatch(
+  theme: string,
+  genre: ImageryGenre,
+  payload: Array<{
+    id: string;
+    title: string;
+    article_type?: string;
+    sentence: string;
+    matched_terms: string[];
+  }>,
+): Promise<ImageryReviewItem[]> {
   const response = await chat({
     model: '',
     jsonMode: true,
     temperature: 0,
-    maxTokens: Math.min(9000, Math.max(2400, candidates.length * 130)),
+    maxTokens: 9000,
     messages: [
       {
         role: 'system',
@@ -226,8 +303,11 @@ async function reviewCandidates(
           '核心标准：词语必须在句中指向可感知的自然物、环境、动作、声音、触觉或由其触发的情感氛围。',
           '仅仅包含同一个汉字不算意象。固定抽象词、人物品格、社会风气、文章风格等必须排除；例如“风骨”中的“风”不是风意象。',
           '不得改写或补造原文，不得因为句子有文学意味就判为意象。',
-          '返回 JSON：{"items":[{"id":"原 id","semantic_match":true,"confidence":0.95,"imagery_role":"自然景物/声音/触觉/动作/氛围/非意象","reason":"简短依据"}]}。',
-          '必须覆盖每一个 id。',
+          '将每句严格分类为：literal（直接呈现）、associated（公认的传统代称或符号）、atmosphere（目标本身出现并主要营造相关氛围）、metaphorical（比喻或象征）、false_positive（同字、抽象词或仅由目标字组成的其他事物）、uncertain（无法确定）。',
+          'associated 不能用于仅仅含有目标字的相关物件、地名、材料或普通复合词；例如目标“风”时“风帆、风帘、风景”不是风的传统代称，目标“梧桐”时“桐城、蜀桐木”也不等于梧桐意象。',
+          'evidence 必须逐字复制候选原句中的最短证据片段，不得改写或补字。',
+          '返回 JSON：{"items":[{"id":"候选句的数字 id","label":"literal","evidence":"原句中的证据","confidence":0.95,"imagery_role":"自然景物","reason":"简短依据"}]}。',
+          'id 必须原样返回，必须覆盖每一个 id，不得漏项、合并或增加候选句。',
         ].join('\n'),
       },
       {
@@ -236,8 +316,63 @@ async function reviewCandidates(
       },
     ],
   }, 'default');
-  const parsed = safeJsonParse<{ items?: ReviewItem[] }>(response.content);
-  return Array.isArray(parsed?.items) ? parsed.items : [];
+  return parseImageryReviewResponse(response.content, payload.map((item) => ({
+    id: item.id,
+    sentence: item.sentence,
+  })));
+}
+
+function statusForLabel(label: ImageryReviewLabel): ImageryCandidate['review_status'] {
+  if (label === 'literal' || label === 'associated' || label === 'atmosphere') return 'accepted';
+  if (label === 'metaphorical' || label === 'uncertain') return 'pending';
+  return 'rejected';
+}
+
+function buildCacheKey(
+  theme: string,
+  genre: ImageryGenre,
+  catalogIds: ArticleCatalogId[],
+  teacherTerms: string[],
+  articles: ReturnType<typeof listTexts>,
+): string {
+  const provider = getActiveProvider();
+  const fingerprint = JSON.stringify({
+    version: REVIEW_PROMPT_VERSION,
+    theme,
+    genre,
+    catalog_ids: [...catalogIds].sort(),
+    teacher_terms: [...teacherTerms].sort(),
+    provider: provider ? {
+      type: provider.provider_type,
+      model: provider.default_model,
+      updated_at: provider.updated_at,
+    } : null,
+    articles: articles.map((article) => ({
+      id: article.id,
+      updated_at: article.updated_at,
+      content_hash: createHash('sha256').update(article.full_text).digest('hex'),
+    })),
+  });
+  return `${CACHE_PREFIX}${createHash('sha256').update(fingerprint).digest('hex')}`;
+}
+
+function readCachedResult(key: string): ImageryScanResult | null {
+  const row = selectOne<{ value: string }>('SELECT value FROM app_settings WHERE key = ?', [key]);
+  const parsed = safeJsonParse<ImageryScanResult>(row?.value || '');
+  return parsed && Array.isArray(parsed.candidates) ? parsed : null;
+}
+
+function writeCachedResult(key: string, result: ImageryScanResult) {
+  execute(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(result), nowIso()],
+  );
+  const stale = selectAll<{ key: string }>(
+    `SELECT key FROM app_settings WHERE key LIKE ? ORDER BY updated_at DESC LIMIT -1 OFFSET ?`,
+    [`${CACHE_PREFIX}%`, MAX_CACHE_ENTRIES],
+  );
+  for (const row of stale) execute('DELETE FROM app_settings WHERE key = ?', [row.key]);
 }
 
 function splitSentences(text: string): string[] {
